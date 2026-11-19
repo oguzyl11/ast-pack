@@ -48,5 +48,8 @@ pub struct Args {
     /// Explain scoring for each symbol.
     #[arg(long, action = clap::ArgAction::SetTrue)]
     pub explain: bool,
+    /// Run as a MCP stdio server.
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    pub mcp: bool,
 }
 
