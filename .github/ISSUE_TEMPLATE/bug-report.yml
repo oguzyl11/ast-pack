@@ -1,0 +1,29 @@
+﻿name: Bug Report
+description: Report a parsing, token budget, or MCP server issue
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the bug and unexpected output.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command & Flags Used
+      render: bash
+      placeholder: ast-pack --focus src/main.rs --budget 16k
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ast-pack Version & OS
+      placeholder: e.g., ast-pack 0.1.0 / Windows x86_64
+    validations:
+      required: true

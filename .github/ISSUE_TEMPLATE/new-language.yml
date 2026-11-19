@@ -1,0 +1,40 @@
+﻿name: New Language Support
+description: Request AST folding support for a new programming language
+title: "[Lang]: Add support for <Language Name>"
+labels: ["enhancement", "language-support"]
+body:
+  - type: input
+    id: language
+    attributes:
+      label: Programming Language
+      placeholder: e.g., Go, Java, C++, Ruby, PHP
+    validations:
+      required: true
+
+  - type: input
+    id: extensions
+    attributes:
+      label: File Extensions
+      placeholder: e.g., .go, .java, .cpp, .hpp
+    validations:
+      required: true
+
+  - type: input
+    id: tree-sitter
+    attributes:
+      label: Official tree-sitter Crate / Grammar URL
+      placeholder: e.g., https://crates.io/crates/tree-sitter-go
+    validations:
+      required: false
+
+  - type: textarea
+    id: symbols
+    attributes:
+      label: Key AST Symbols to Fold
+      description: Which constructs should support L0–L4 granularity?
+      placeholder: |
+        - Functions / Methods
+        - Structs / Classes / Interfaces
+        - Enums / Type aliases
+    validations:
+      required: true
