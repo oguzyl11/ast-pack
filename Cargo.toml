@@ -1,27 +1,49 @@
-# Cargo.toml (cleaned)
 [package]
 name = "ast-pack"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Fold your codebase into an LLM token budget. Unfold on demand."
+repository = "https://github.com/oguzyl11/ast-pack"
+readme = "README.md"
+keywords = ["llm", "mcp", "tree-sitter", "cli", "context"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["target", "bench/corpus/**/target", ".ast-pack-cache"]
+
+[lib]
+name = "ast_pack"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ast-pack"
+path = "src/main.rs"
+
+[[bin]]
+name = "context-bench"
+path = "src/bin/context-bench.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 petgraph = "0.6"
 anyhow = "1.0"
+thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 blake3 = "1.5"
 arboard = "2.0"
-# Tree‑sitter core and language crates – unified versions
-tree-sitter = "0.27"
-# Language crates (compatible versions)
-# Note: tree-sitter‑javascript 0.25 works with tree‑sitter 0.27
+tree-sitter = "0.25"
 tree-sitter-typescript = "0.23.2"
-tree-sitter-javascript = "0.25.0"
-tree-sitter-python = "0.20.0"
-tree-sitter-rust = "0.20"
-tree-sitter-java = "0.20.0"
-tree-sitter-go = "0.20.0"
-
+tree-sitter-javascript = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-java = "0.23.5"
+tree-sitter-go = "0.25"
 glob = "0.3"
+ignore = "0.4"
+rayon = "1.10"
+tiktoken-rs = "0.6"
+toml = "0.8"
+
+[dev-dependencies]
+proptest = "1.6"
+tempfile = "3"

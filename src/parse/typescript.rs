@@ -1,11 +1,6 @@
-// src/parse/typescript.rs
+use crate::error::PackError;
 
-use anyhow::Result;
-use std::path::PathBuf;
-use crate::model::symbol::Symbol;
-
-/// Placeholder parser – returns an empty symbol list.
-pub fn parse(_path: &PathBuf) -> Result<Vec<Symbol>> {
-    // In a full implementation this would parse the file using tree‑sitter‑typescript.
-    Ok(Vec::new())
+pub fn extract(source: &str) -> Result<super::rust::Extracted, PackError> {
+    let tsx = false;
+    super::javascript::extract_typescript(source, tsx)
 }

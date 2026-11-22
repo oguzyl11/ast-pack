@@ -1,75 +1,140 @@
-// src/model/graph.rs
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::algo::page_rank;
 use std::collections::HashMap;
-use anyhow::Result;
 
-use crate::model::{
-    symbol::{Symbol, SymbolId},
-    edge::Edge,
-};
+use petgraph::graph::DiGraph;
 
-/// Wrapper around a directed graph of symbols.
+use super::edge::Edge;
+
+/// Personalized PageRank over the symbol graph.
+///
+/// Seeds are normalized to sum to 1. An empty seed map falls back to a uniform
+/// prior. Dangling nodes (no outgoing weight) redistribute along that prior.
 pub struct SymbolGraph {
-    pub graph: DiGraph<Symbol, Edge>,
-    pub idx_map: HashMap<SymbolId, NodeIndex>,
+    graph: DiGraph<String, f32>,
 }
 
 impl SymbolGraph {
-    /// Build a graph from a list of symbols and edges.
-    pub fn new(symbols: Vec<Symbol>, edges: Vec<Edge>) -> Self {
+    pub fn new(ids: &[String], edges: &[Edge]) -> Self {
         let mut graph = DiGraph::new();
-        let mut idx_map = HashMap::new();
-
-        // Insert symbols as nodes.
-        for sym in symbols {
-            let idx = graph.add_node(sym.clone());
-            idx_map.insert(sym.id.clone(), idx);
+        let mut index = HashMap::new();
+        for id in ids {
+            let idx = graph.add_node(id.clone());
+            index.insert(id.clone(), idx);
         }
-
-        // Insert edges, ignoring missing nodes.
+        let mut merged: HashMap<(usize, usize), f32> = HashMap::new();
         for edge in edges {
-            if let (Some(&src_idx), Some(&dst_idx)) = (
-                idx_map.get(&edge.source),
-                idx_map.get(&edge.target),
-            ) {
-                graph.add_edge(src_idx, dst_idx, edge);
+            let Some(src) = index.get(&edge.source.fold_id()) else {
+                continue;
+            };
+            let Some(dst) = index.get(&edge.target.fold_id()) else {
+                continue;
+            };
+            if src == dst || edge.weight <= 0.0 {
+                continue;
             }
+            *merged.entry((src.index(), dst.index())).or_insert(0.0) += edge.weight;
         }
-
-        Self { graph, idx_map }
+        let mut pairs: Vec<_> = merged.into_iter().collect();
+        pairs.sort_by_key(|(k, _)| *k);
+        for ((src, dst), weight) in pairs {
+            graph.add_edge(
+                petgraph::graph::NodeIndex::new(src),
+                petgraph::graph::NodeIndex::new(dst),
+                weight,
+            );
+        }
+        Self { graph }
     }
 
-    /// Run personalized PageRank.
-    ///
-    /// `seeds` maps a `SymbolId` to a seed weight (e.g. focus = 1.0, diff = 0.8, task = 0.5).
-    /// If `seeds` is empty the function falls back to a uniform distribution.
-    pub fn page_rank(&self, seeds: &HashMap<SymbolId, f32>) -> Result<HashMap<SymbolId, f32>> {
-        let mut personalization = vec![0.0_f64; self.graph.node_count()];
-        for (sid, &weight) in seeds {
-            if let Some(&idx) = self.idx_map.get(sid) {
-                personalization[idx.index()] = weight as f64;
-            }
-        }
-
-        // Uniform distribution when no seeds.
-        if personalization.iter().all(|&v| v == 0.0) {
-            let uniform = 1.0 / self.graph.node_count() as f64;
-            for v in &mut personalization {
-                *v = uniform;
-            }
-        }
-
-        // PageRank parameters: damping 0.85, max 20 iterations.
-        let scores = page_rank(&self.graph, 0.85, 20);
-
-        // Convert back to SymbolId -> score.
+    pub fn page_rank(&self, seeds: &HashMap<String, f32>) -> HashMap<String, f32> {
+        let n = self.graph.node_count();
         let mut result = HashMap::new();
-        for (idx, score) in scores.iter().enumerate() {
-            let node = self.graph.node_weight(NodeIndex::new(idx)).unwrap();
-            result.insert(node.id.clone(), *score as f32);
+        if n == 0 {
+            return result;
         }
-        Ok(result)
+        let mut personal = vec![0.0f64; n];
+        let mut seed_sum = 0.0f64;
+        for idx in self.graph.node_indices() {
+            let id = self.graph.node_weight(idx).unwrap();
+            if let Some(weight) = seeds.get(id).copied().filter(|w| *w > 0.0) {
+                personal[idx.index()] = f64::from(weight);
+                seed_sum += f64::from(weight);
+            }
+        }
+        if seed_sum == 0.0 {
+            let uniform = 1.0 / n as f64;
+            personal.fill(uniform);
+        } else {
+            for value in &mut personal {
+                *value /= seed_sum;
+            }
+        }
+
+        let mut outgoing = vec![0.0f64; n];
+        let mut incoming: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
+        let mut edge_list = Vec::new();
+        for edge in self.graph.edge_indices() {
+            let (src, dst) = self.graph.edge_endpoints(edge).unwrap();
+            let weight = f64::from(*self.graph.edge_weight(edge).unwrap());
+            edge_list.push((src.index(), dst.index(), weight));
+        }
+        edge_list.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        for (src, dst, weight) in edge_list {
+            outgoing[src] += weight;
+            incoming[dst].push((src, weight));
+        }
+
+        const DAMPING: f64 = 0.85;
+        const ITERS: usize = 40;
+        let mut rank = personal.clone();
+        for _ in 0..ITERS {
+            let dangling: f64 = (0..n).filter(|&i| outgoing[i] == 0.0).map(|i| rank[i]).sum();
+            let mut next = vec![0.0f64; n];
+            for i in 0..n {
+                let mut acc = 0.0;
+                for &(src, weight) in &incoming[i] {
+                    acc += rank[src] * weight / outgoing[src];
+                }
+                next[i] = (1.0 - DAMPING) * personal[i] + DAMPING * (acc + dangling * personal[i]);
+            }
+            rank = next;
+        }
+
+        for idx in self.graph.node_indices() {
+            let id = self.graph.node_weight(idx).unwrap().clone();
+            let quantized = (rank[idx.index()] * 1_000_000.0).round() / 1_000_000.0;
+            result.insert(id, quantized as f32);
+        }
+        result
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{EdgeKind, SymbolId};
+
+    fn id(name: &str) -> SymbolId {
+        SymbolId {
+            file: "a.rs".into(),
+            symbol_path: name.into(),
+            overload: None,
+        }
+    }
+
+    #[test]
+    fn seed_mass_reaches_callees() {
+        let ids = vec!["main".to_string(), "helper".to_string()];
+        let edges = vec![Edge {
+            source: id("main"),
+            target: id("helper"),
+            kind: EdgeKind::Call,
+            weight: 1.0,
+        }];
+        let graph = SymbolGraph::new(&ids, &edges);
+        let mut seeds = HashMap::new();
+        seeds.insert("main".to_string(), 1.0);
+        let scores = graph.page_rank(&seeds);
+        assert!(scores["helper"] > 0.0);
+        assert!(scores["main"] >= scores["helper"]);
+    }
+}

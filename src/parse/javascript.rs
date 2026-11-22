@@ -1,131 +1,201 @@
-// src/parse/javascript.rs
+use tree_sitter::Node;
 
-use anyhow::Result;
-use std::path::PathBuf;
-use tree_sitter::{Node, Parser};
-use tree_sitter_javascript::language as javascript_language;
-use crate::model::symbol::{Symbol, SymbolId, DetailLevel};
-use crate::tokenizer::Tokenizer;
+use super::extract::{
+    assign_overloads, collect_imports, collect_refs, field_blob, field_name, join_path, kids,
+    parse_language, preceding_doc, Ctx,
+};
+use crate::error::PackError;
+use crate::model::SymbolKind;
 
-/// Parse a JavaScript or JSX file and extract symbols.
-pub fn parse(path: &PathBuf) -> Result<Vec<Symbol>> {
-    let source = std::fs::read_to_string(path)?;
-    let mut parser = Parser::new();
-        parser.set_language(&javascript_language()).expect("failed to load JavaScript grammar");
-    let tree = parser.parse(&source, None).ok_or_else(|| anyhow::anyhow!("failed to parse"))?;
+const DEFS: &[&str] = &[
+    "function_declaration",
+    "class_declaration",
+    "method_definition",
+    "generator_function_declaration",
+    "variable_declarator",
+];
 
-    let mut symbols = Vec::new();
-    let root = tree.root_node();
-
-    fn walk_node(
-        node: Node,
-        source: &str,
-        path: &PathBuf,
-        symbols: &mut Vec<Symbol>,
-    ) -> Result<()> {
-        match node.kind() {
-            "function_declaration" => extract_function(node, source, path, symbols)?,
-            "class_declaration" => extract_class(node, source, path, symbols)?,
-            "lexical_declaration" => extract_lexical_declaration(node, source, path, symbols)?,
-            _ => {}
-        }
-        for child in node.children(&mut node.walk()) {
-            walk_node(child, source, path, symbols)?;
-        }
-        Ok(())
-    }
-
-    walk_node(root, &source, path, &mut symbols)?;
-    Ok(symbols)
+pub fn extract(source: &str) -> Result<super::rust::Extracted, PackError> {
+    let tree = parse_language(source, tree_sitter_javascript::LANGUAGE.into())?;
+    let mut ctx = Ctx::new(source);
+    walk(tree.root_node(), &mut ctx, None);
+    assign_overloads(&mut ctx.drafts);
+    Ok(super::rust::Extracted {
+        drafts: ctx.drafts,
+        imports: ctx.imports,
+    })
 }
 
-fn byte_range(node: Node) -> std::ops::Range<usize> {
-    let start = node.start_byte();
-    let end = node.end_byte();
-    start..end
-}
-
-fn extract_function(
-    node: Node,
-    source: &str,
-    path: &PathBuf,
-    symbols: &mut Vec<Symbol>,
-) -> Result<()> {
-    let name_node = node.child_by_field_name("name").ok_or_else(|| anyhow::anyhow!("no name"))?;
-    let name = name_node.utf8_text(source.as_bytes())?.to_string();
-    let signature_node = node.child_by_field_name("parameters").unwrap_or(node);
-    let signature_range = byte_range(node).start..signature_node.end_byte();
-    let body_node = node.child_by_field_name("body").ok_or_else(|| anyhow::anyhow!("no body"))?;
-    let body_range = byte_range(body_node);
-
-    let id = SymbolId {
-        file: path.clone(),
-        symbol_path: name,
-        overload: None,
+pub fn extract_typescript(source: &str, tsx: bool) -> Result<super::rust::Extracted, PackError> {
+    let language = if tsx {
+        tree_sitter_typescript::LANGUAGE_TSX.into()
+    } else {
+        tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
     };
-
-    let tokenizer = Tokenizer::new("o200k").unwrap();
-    let body_tokens = tokenizer.count(&source[body_range.clone()]);
-    let sig_tokens = tokenizer.count(&source[signature_range.clone()]);
-
-    symbols.push(Symbol {
-        id,
-        body_range,
-        signature_range,
-        doc_range: None,
-        body_tokens,
-        sig_tokens,
-        level: DetailLevel::Omitted,
-    });
-    Ok(())
+    let tree = parse_language(source, language)?;
+    let mut ctx = Ctx::new(source);
+    walk(tree.root_node(), &mut ctx, None);
+    assign_overloads(&mut ctx.drafts);
+    Ok(super::rust::Extracted {
+        drafts: ctx.drafts,
+        imports: ctx.imports,
+    })
 }
 
-fn extract_class(
-    node: Node,
-    source: &str,
-    path: &PathBuf,
-    symbols: &mut Vec<Symbol>,
-) -> Result<()> {
-    let name_node = node.child_by_field_name("name").ok_or_else(|| anyhow::anyhow!("no name"))?;
-    let name = name_node.utf8_text(source.as_bytes())?.to_string();
-    let body_node = node.child_by_field_name("body").ok_or_else(|| anyhow::anyhow!("no body"))?;
-    let body_range = byte_range(body_node);
-    let signature_range = byte_range(node).start..node.end_byte();
-
-    let id = SymbolId {
-        file: path.clone(),
-        symbol_path: name,
-        overload: None,
-    };
-
-    let tokenizer = Tokenizer::new("o200k").unwrap();
-    let body_tokens = tokenizer.count(&source[body_range.clone()]);
-    let sig_tokens = tokenizer.count(&source[signature_range.clone()]);
-
-    symbols.push(Symbol {
-        id,
-        body_range,
-        signature_range,
-        doc_range: None,
-        body_tokens,
-        sig_tokens,
-        level: DetailLevel::Omitted,
-    });
-    Ok(())
-}
-
-fn extract_lexical_declaration(
-    node: Node,
-    source: &str,
-    path: &PathBuf,
-    symbols: &mut Vec<Symbol>,
-) -> Result<()> {
-    // Handles const/let variable declarations that may have functions as init
-    for child in node.named_children(&mut node.walk()) {
-        if child.kind() == "function" || child.kind() == "arrow_function" {
-            extract_function(child, source, path, symbols)?;
+fn walk(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
+    match node.kind() {
+        "import_statement" => {
+            collect_imports(node, ctx.source, &mut ctx.imports);
+        }
+        "function_declaration" | "generator_function_declaration" => {
+            add_fn(node, ctx, parent, SymbolKind::Function);
+        }
+        "class_declaration" | "abstract_class_declaration" => add_class(node, ctx, parent),
+        "interface_declaration" => add_type(node, ctx, parent, SymbolKind::Interface),
+        "type_alias_declaration" => add_type(node, ctx, parent, SymbolKind::TypeAlias),
+        "enum_declaration" => add_type(node, ctx, parent, SymbolKind::Enum),
+        "method_definition" | "method_signature" | "abstract_method_signature" => {
+            add_fn(node, ctx, parent, SymbolKind::Method);
+        }
+        "variable_declarator" => add_var_fn(node, ctx, parent),
+        "export_statement" => {
+            let before = ctx.drafts.len();
+            for child in kids(node) {
+                walk(child, ctx, parent);
+            }
+            if let Some(draft) = ctx.drafts.get_mut(before) {
+                draft.span.start = node.start_byte();
+            }
+        }
+        _ => {
+            for child in kids(node) {
+                walk(child, ctx, parent);
+            }
         }
     }
-    Ok(())
 }
 
+fn add_fn(node: Node, ctx: &mut Ctx, parent: Option<&str>, kind: SymbolKind) {
+    let Some(name) = field_name(node, ctx.source) else {
+        return;
+    };
+    let path = join_path(parent, &name);
+    let kind = if parent.is_some() {
+        SymbolKind::Method
+    } else {
+        kind
+    };
+    let sig_end = node
+        .child_by_field_name("body")
+        .map(|n| n.start_byte())
+        .unwrap_or_else(|| node.end_byte());
+    ctx.add(
+        node,
+        &name,
+        &path,
+        kind,
+        sig_end,
+        collect_refs(node, ctx.source, DEFS),
+        None,
+        preceding_doc(node, ctx.source),
+    );
+    if let Some(body) = node.child_by_field_name("body") {
+        for child in kids(body) {
+            walk(child, ctx, Some(&path));
+        }
+    }
+}
+
+fn add_class(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
+    let Some(name) = field_name(node, ctx.source) else {
+        return;
+    };
+    let path = join_path(parent, &name);
+    let extra = node.child_by_field_name("body").and_then(|body| {
+        field_blob(
+            body,
+            ctx.source,
+            &[
+                "method_definition",
+                "method_signature",
+                "abstract_method_signature",
+                "class_declaration",
+            ],
+        )
+    });
+    let sig_end = node
+        .child_by_field_name("body")
+        .map(|n| n.start_byte())
+        .unwrap_or_else(|| node.end_byte());
+    ctx.add(
+        node,
+        &name,
+        &path,
+        SymbolKind::Class,
+        sig_end,
+        collect_refs(node, ctx.source, DEFS),
+        extra,
+        preceding_doc(node, ctx.source),
+    );
+    if let Some(body) = node.child_by_field_name("body") {
+        for child in kids(body) {
+            walk(child, ctx, Some(&path));
+        }
+    }
+}
+
+fn add_type(node: Node, ctx: &mut Ctx, parent: Option<&str>, kind: SymbolKind) {
+    let Some(name) = field_name(node, ctx.source) else {
+        return;
+    };
+    let path = join_path(parent, &name);
+    ctx.add(
+        node,
+        &name,
+        &path,
+        kind,
+        node.end_byte(),
+        collect_refs(node, ctx.source, DEFS),
+        None,
+        preceding_doc(node, ctx.source),
+    );
+    if let Some(body) = node.child_by_field_name("body") {
+        for child in kids(body) {
+            walk(child, ctx, Some(&path));
+        }
+    }
+}
+
+fn add_var_fn(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
+    let Some(value) = node.child_by_field_name("value") else {
+        return;
+    };
+    if !matches!(value.kind(), "arrow_function" | "function" | "function_expression" | "generator_function") {
+        for child in kids(node) {
+            walk(child, ctx, parent);
+        }
+        return;
+    }
+    let Some(name) = field_name(node, ctx.source) else {
+        return;
+    };
+    let path = join_path(parent, &name);
+    let sig_end = value
+        .child_by_field_name("body")
+        .map(|n| n.start_byte())
+        .unwrap_or_else(|| value.start_byte());
+    ctx.add(
+        node,
+        &name,
+        &path,
+        if parent.is_some() {
+            SymbolKind::Method
+        } else {
+            SymbolKind::Function
+        },
+        sig_end,
+        collect_refs(node, ctx.source, DEFS),
+        None,
+        preceding_doc(node, ctx.source),
+    );
+}
