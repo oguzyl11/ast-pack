@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
-use crate::model::symbol::{Symbol, SymbolId, DetailLevel};
+use crate::model::symbol::Symbol;
 
 /// Placeholder parser – returns an empty symbol list.
 pub fn parse(_path: &PathBuf) -> Result<Vec<Symbol>> {

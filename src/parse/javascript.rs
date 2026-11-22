@@ -2,9 +2,9 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
-use tree_sitter::{Node, Parser, Tree};
+use tree_sitter::{Node, Parser};
 use tree_sitter_javascript::language as javascript_language;
-use crate::model::symbol::{Symbol, SymbolId, DetailLevel};
+use crate::model::symbol::Symbol;
 use crate::tokenizer::Tokenizer;
 
 /// Parse a JavaScript or JSX file and extract symbols.
