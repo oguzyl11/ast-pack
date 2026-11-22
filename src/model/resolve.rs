@@ -53,10 +53,15 @@ pub fn build_edges(
         by_name.entry(sym.name.as_str()).or_default().push(sym);
     }
 
+    let mut by_fold: HashMap<String, &Symbol> = HashMap::with_capacity(symbols.len());
+    for sym in symbols {
+        by_fold.entry(sym.id.fold_id()).or_insert(sym);
+    }
+
     let mut edges = Vec::new();
     for sym in symbols {
         if let Some(parent) = &sym.container {
-            if let Some(source) = symbols.iter().find(|s| s.id.fold_id() == *parent) {
+            if let Some(source) = by_fold.get(parent) {
                 edges.push(Edge {
                     source: source.id.clone(),
                     target: sym.id.clone(),

@@ -33,6 +33,7 @@ pub struct PackOptions {
     pub cache: bool,
     pub write_folds: bool,
     pub compute_full: bool,
+    pub progress: bool,
 }
 
 impl PackOptions {
@@ -49,6 +50,7 @@ impl PackOptions {
             cache: true,
             write_folds: true,
             compute_full: false,
+            progress: false,
         }
     }
 }
@@ -82,7 +84,13 @@ struct ParsedFile {
 }
 
 pub fn pack(options: &PackOptions) -> Result<PackOutput, PackError> {
+    if options.progress {
+        eprintln!("scanning {}", options.root.display());
+    }
     let workspace = walk::load_workspace(&options.root)?;
+    if options.progress {
+        eprintln!("{} source files", workspace.files.len());
+    }
     let tokenizer = Tokenizer::new(&options.tokenizer)?;
     let mut warnings = Vec::new();
 
@@ -116,6 +124,9 @@ pub fn pack(options: &PackOptions) -> Result<PackOutput, PackError> {
             .then(a.span.start.cmp(&b.span.start))
             .then(a.id.fold_id().cmp(&b.id.fold_id()))
     });
+    if options.progress {
+        eprintln!("{} symbols", symbols.len());
+    }
 
     for sym in &mut symbols {
         let source = texts.get(&sym.id.file).map(String::as_str).unwrap_or("");

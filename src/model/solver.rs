@@ -30,27 +30,28 @@ pub fn solve(
     req: SolveRequest<'_>,
     mut measure: impl FnMut(&HashMap<String, DetailLevel>) -> usize,
 ) -> Result<(HashMap<String, DetailLevel>, Vec<Decision>), PackError> {
+    let index = SymIndex::new(req.symbols);
     let mut levels: HashMap<String, DetailLevel> = HashMap::new();
     let mut reasons: HashMap<String, String> = HashMap::new();
-    for sym in req.symbols {
-        levels.insert(sym.id.fold_id(), DetailLevel::L4);
-        reasons.insert(sym.id.fold_id(), "omitted".to_string());
+    for id in &index.ids {
+        levels.insert(id.clone(), DetailLevel::L4);
+        reasons.insert(id.clone(), "omitted".to_string());
     }
 
     match req.mode {
         PackMode::Full => {
-            for sym in req.symbols {
-                levels.insert(sym.id.fold_id(), DetailLevel::L0);
-                reasons.insert(sym.id.fold_id(), "full dump".to_string());
+            for id in &index.ids {
+                levels.insert(id.clone(), DetailLevel::L0);
+                reasons.insert(id.clone(), "full dump".to_string());
             }
-            swallow(&mut levels, req.symbols);
+            index.swallow(&mut levels);
             let decided = decisions(req.symbols, &levels, req.scores, &reasons);
             return Ok((levels, decided));
         }
         PackMode::Names => {
-            for sym in req.symbols {
-                levels.insert(sym.id.fold_id(), DetailLevel::L3);
-                reasons.insert(sym.id.fold_id(), "name map".to_string());
+            for id in &index.ids {
+                levels.insert(id.clone(), DetailLevel::L3);
+                reasons.insert(id.clone(), "name map".to_string());
             }
             let decided = decisions(req.symbols, &levels, req.scores, &reasons);
             return Ok((levels, decided));
@@ -59,13 +60,12 @@ pub fn solve(
     }
 
     if req.budget.is_none() {
-        for sym in req.symbols {
-            let id = sym.id.fold_id();
-            if req.focus.contains(&id) || req.diff.contains(&id) {
+        for id in &index.ids {
+            if req.focus.contains(id) || req.diff.contains(id) {
                 levels.insert(id.clone(), DetailLevel::L0);
                 reasons.insert(
-                    id,
-                    if req.focus.contains(&sym.id.fold_id()) {
+                    id.clone(),
+                    if req.focus.contains(id) {
                         "pinned by --focus".to_string()
                     } else {
                         "changed lines (--diff)".to_string()
@@ -73,10 +73,10 @@ pub fn solve(
                 );
             } else {
                 levels.insert(id.clone(), DetailLevel::L1);
-                reasons.insert(id, "default L1 (no budget)".to_string());
+                reasons.insert(id.clone(), "default L1 (no budget)".to_string());
             }
         }
-        swallow(&mut levels, req.symbols);
+        index.swallow(&mut levels);
         let decided = decisions(req.symbols, &levels, req.scores, &reasons);
         return Ok((levels, decided));
     }
@@ -93,14 +93,13 @@ pub fn solve(
         });
     }
 
-    for sym in req.symbols {
-        let id = sym.id.fold_id();
-        if req.focus.contains(&id) {
+    for id in &index.ids {
+        if req.focus.contains(id) {
             levels.insert(id.clone(), DetailLevel::L0);
-            reasons.insert(id, "pinned by --focus".to_string());
+            reasons.insert(id.clone(), "pinned by --focus".to_string());
         }
     }
-    swallow(&mut levels, req.symbols);
+    index.swallow(&mut levels);
     let focus_tokens = measure(&levels);
     if focus_tokens > budget {
         return Err(PackError::FocusExceedsBudget {
@@ -118,18 +117,21 @@ pub fn solve(
             .then(a.cmp(b))
     });
     for id in diff_ids {
-        if !levels.contains_key(&id) || req.focus.contains(&id) {
+        let Some(idx) = index.by_id.get(&id).copied() else {
+            continue;
+        };
+        if req.focus.contains(&id) {
             continue;
         }
-        if swallowed_id(&id, &levels, req.symbols) {
+        if index.swallowed(idx, &levels) {
             continue;
         }
         let previous = levels[&id];
         levels.insert(id.clone(), DetailLevel::L0);
-        swallow(&mut levels, req.symbols);
+        index.swallow(&mut levels);
         if measure(&levels) > budget {
             levels.insert(id.clone(), previous);
-            swallow(&mut levels, req.symbols);
+            index.swallow(&mut levels);
         } else {
             reasons.insert(id, "changed lines (--diff)".to_string());
         }
@@ -143,15 +145,15 @@ pub fn solve(
         if guard > req.symbols.len().saturating_mul(4).saturating_add(8) {
             break;
         }
-        let used = estimate(&levels, req.symbols, header);
+        let used = estimate(&index, &levels, header);
         let remaining = budget.saturating_sub(used.min(budget));
-        let mut best: Option<(String, f32)> = None;
-        for sym in req.symbols {
-            let id = sym.id.fold_id();
-            if req.focus.contains(&id) || swallowed_id(&id, &levels, req.symbols) {
+        let mut best: Option<(usize, f32)> = None;
+        for (idx, sym) in index.symbols.iter().enumerate() {
+            let id = &index.ids[idx];
+            if req.focus.contains(id) || index.swallowed(idx, &levels) {
                 continue;
             }
-            let current = levels[&id];
+            let current = levels[id];
             if current == DetailLevel::L0 {
                 continue;
             }
@@ -160,19 +162,22 @@ pub fn solve(
             if extra > remaining && extra > 0 {
                 continue;
             }
-            let gain = score(req.scores, &id) * (next.value() - current.value());
+            let gain = score(req.scores, id) * (next.value() - current.value());
             let ratio = gain / (extra as f32).max(1.0);
-            let replace = match &best {
+            let replace = match best {
                 None => true,
-                Some((bid, br)) => ratio > *br + 1e-9 || ((ratio - br).abs() <= 1e-9 && id < *bid),
+                Some((bidx, br)) => {
+                    ratio > br + 1e-9 || ((ratio - br).abs() <= 1e-9 && id < &index.ids[bidx])
+                }
             };
             if replace && gain > 0.0 {
-                best = Some((id, ratio));
+                best = Some((idx, ratio));
             }
         }
-        let Some((id, _)) = best else {
+        let Some((idx, _)) = best else {
             break;
         };
+        let id = index.ids[idx].clone();
         let current = levels[&id];
         levels.insert(id.clone(), current.finer());
         let reason = if req.seeded.contains(&id) && !req.diff.contains(&id) {
@@ -181,12 +186,12 @@ pub fn solve(
             "score / token cost"
         };
         reasons.insert(id, reason.to_string());
-        swallow(&mut levels, req.symbols);
+        index.swallow(&mut levels);
     }
 
     fit_budget(
+        &index,
         &mut levels,
-        req.symbols,
         req.focus,
         budget,
         &mut measure,
@@ -197,8 +202,8 @@ pub fn solve(
 }
 
 fn fit_budget(
+    index: &SymIndex<'_>,
     levels: &mut HashMap<String, DetailLevel>,
-    symbols: &[Symbol],
     focus: &HashSet<String>,
     budget: usize,
     measure: &mut impl FnMut(&HashMap<String, DetailLevel>) -> usize,
@@ -218,35 +223,35 @@ fn fit_budget(
             });
         }
         let overflow = used - budget;
-        let mut order: Vec<&Symbol> = symbols
-            .iter()
-            .filter(|s| {
-                let id = s.id.fold_id();
-                !focus.contains(&id)
-                    && levels.get(&id).copied().unwrap_or(DetailLevel::L4) != DetailLevel::L4
-                    && !swallowed_id(&id, levels, symbols)
+        let mut order: Vec<usize> = (0..index.symbols.len())
+            .filter(|&idx| {
+                let id = &index.ids[idx];
+                !focus.contains(id)
+                    && levels.get(id).copied().unwrap_or(DetailLevel::L4) != DetailLevel::L4
+                    && !index.swallowed(idx, levels)
             })
             .collect();
-        order.sort_by(|a, b| {
-            priority(a, levels)
-                .partial_cmp(&priority(b, levels))
+        order.sort_by(|&a, &b| {
+            priority(&index.symbols[a], levels)
+                .partial_cmp(&priority(&index.symbols[b], levels))
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then(b.id.fold_id().cmp(&a.id.fold_id()))
+                .then(index.ids[b].cmp(&index.ids[a]))
         });
         let mut saved = 0usize;
         let mut progressed = false;
-        for sym in order {
-            let id = sym.id.fold_id();
-            let current = levels[&id];
+        for idx in order {
+            let sym = &index.symbols[idx];
+            let id = &index.ids[idx];
+            let current = levels[id];
             if current == DetailLevel::L4 {
                 continue;
             }
             let before = sym.cost_of(current);
             let next = current.coarser();
             levels.insert(id.clone(), next);
-            swallow(levels, symbols);
+            index.swallow(levels);
             saved += before.saturating_sub(sym.cost_of(next));
-            reasons.insert(id, "downgraded to fit the budget".to_string());
+            reasons.insert(id.clone(), "downgraded to fit the budget".to_string());
             progressed = true;
             if saved >= overflow.saturating_add(32) {
                 break;
@@ -271,16 +276,16 @@ fn score(scores: &HashMap<String, f32>, id: &str) -> f32 {
     scores.get(id).copied().unwrap_or(0.0).max(1e-6)
 }
 
-fn estimate(levels: &HashMap<String, DetailLevel>, symbols: &[Symbol], header: usize) -> usize {
+fn estimate(index: &SymIndex<'_>, levels: &HashMap<String, DetailLevel>, header: usize) -> usize {
     let mut total = header;
     let mut files = HashSet::new();
-    for sym in symbols {
-        let id = sym.id.fold_id();
-        let level = levels.get(&id).copied().unwrap_or(DetailLevel::L4);
-        if level == DetailLevel::L4 || swallowed_id(&id, levels, symbols) {
+    for (idx, sym) in index.symbols.iter().enumerate() {
+        let id = &index.ids[idx];
+        let level = levels.get(id).copied().unwrap_or(DetailLevel::L4);
+        if level == DetailLevel::L4 || index.swallowed(idx, levels) {
             continue;
         }
-        files.insert(sym.id.file.clone());
+        files.insert(sym.id.file.as_str());
         total += sym.cost_of(level);
     }
     total += files.len() * 12;
@@ -288,36 +293,66 @@ fn estimate(levels: &HashMap<String, DetailLevel>, symbols: &[Symbol], header: u
 }
 
 pub fn swallow(levels: &mut HashMap<String, DetailLevel>, symbols: &[Symbol]) {
-    let snapshot = levels.clone();
-    for sym in symbols {
-        if swallowed_id(&sym.id.fold_id(), &snapshot, symbols) {
-            levels.insert(sym.id.fold_id(), DetailLevel::L4);
-        }
-    }
+    SymIndex::new(symbols).swallow(levels);
 }
 
-fn swallowed_id(id: &str, levels: &HashMap<String, DetailLevel>, symbols: &[Symbol]) -> bool {
-    let Some(sym) = symbols.iter().find(|s| s.id.fold_id() == id) else {
-        return false;
-    };
-    let mut container = sym.container.as_deref();
-    while let Some(parent_id) = container {
-        let expanded = levels.get(parent_id).copied().unwrap_or(DetailLevel::L4);
-        let parent_kind = symbols
-            .iter()
-            .find(|s| s.id.fold_id() == parent_id)
-            .map(|s| s.kind);
-        let swallows = expanded == DetailLevel::L0
-            || (expanded == DetailLevel::L1 && parent_kind.is_some_and(|k| k.is_full_at_l1()));
-        if swallows {
-            return true;
+/// Fold ids and parent links built once. The budget search used to rebuild those
+/// strings on every comparison, which made a few hundred symbols take minutes.
+struct SymIndex<'a> {
+    symbols: &'a [Symbol],
+    ids: Vec<String>,
+    by_id: HashMap<String, usize>,
+    parent: Vec<Option<usize>>,
+}
+
+impl<'a> SymIndex<'a> {
+    fn new(symbols: &'a [Symbol]) -> Self {
+        let ids: Vec<String> = symbols.iter().map(|sym| sym.id.fold_id()).collect();
+        let mut by_id = HashMap::with_capacity(ids.len());
+        for (idx, id) in ids.iter().enumerate() {
+            by_id.entry(id.clone()).or_insert(idx);
         }
-        container = symbols
+        let parent = symbols
             .iter()
-            .find(|s| s.id.fold_id() == parent_id)
-            .and_then(|s| s.container.as_deref());
+            .map(|sym| sym.container.as_ref().and_then(|id| by_id.get(id).copied()))
+            .collect();
+        Self {
+            symbols,
+            ids,
+            by_id,
+            parent,
+        }
     }
-    false
+
+    fn swallowed(&self, idx: usize, levels: &HashMap<String, DetailLevel>) -> bool {
+        let mut cursor = self.parent[idx];
+        let mut guard = 0;
+        while let Some(parent) = cursor {
+            guard += 1;
+            if guard > self.symbols.len() {
+                return false;
+            }
+            let level = levels
+                .get(&self.ids[parent])
+                .copied()
+                .unwrap_or(DetailLevel::L4);
+            let kind = self.symbols[parent].kind;
+            if level == DetailLevel::L0 || (level == DetailLevel::L1 && kind.is_full_at_l1()) {
+                return true;
+            }
+            cursor = self.parent[parent];
+        }
+        false
+    }
+
+    fn swallow(&self, levels: &mut HashMap<String, DetailLevel>) {
+        let snapshot = levels.clone();
+        for idx in 0..self.symbols.len() {
+            if self.swallowed(idx, &snapshot) {
+                levels.insert(self.ids[idx].clone(), DetailLevel::L4);
+            }
+        }
+    }
 }
 
 fn decisions(

@@ -51,6 +51,7 @@ fn pack_cmd() -> Result<(), PackError> {
     options.format = Format::parse(&args.format)?;
     options.mode = PackMode::Auto;
     options.compute_full = args.stats;
+    options.progress = true;
     let packed = pipeline::pack(&options)?;
     for warning in &packed.warnings {
         eprintln!("warning: {warning}");
