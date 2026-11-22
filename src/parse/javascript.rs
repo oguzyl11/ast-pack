@@ -3,7 +3,7 @@
 use anyhow::Result;
 use std::path::PathBuf;
 use tree_sitter::{Node, Parser};
-use tree_sitter_javascript::LANGUAGE as javascript_language;
+use tree_sitter_javascript::language as javascript_language;
 use crate::model::symbol::{Symbol, SymbolId, DetailLevel};
 use crate::tokenizer::Tokenizer;
 
@@ -11,7 +11,7 @@ use crate::tokenizer::Tokenizer;
 pub fn parse(path: &PathBuf) -> Result<Vec<Symbol>> {
     let source = std::fs::read_to_string(path)?;
     let mut parser = Parser::new();
-    parser.set_language(&javascript_language())?;
+        parser.set_language(&javascript_language()).expect("failed to load JavaScript grammar");
     let tree = parser.parse(&source, None).ok_or_else(|| anyhow::anyhow!("failed to parse"))?;
 
     let mut symbols = Vec::new();

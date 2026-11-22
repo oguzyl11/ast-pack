@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use crate::model::{
     symbol::{Symbol, SymbolId},
-    edge::{Edge, EdgeKind},
+    edge::Edge,
 };
 
 /// Wrapper around a directed graph of symbols.

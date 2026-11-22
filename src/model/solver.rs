@@ -35,7 +35,7 @@ pub fn solve_budget(
 ) -> Result<PackPlan> {
     // 1️⃣ Build graph and compute PageRank scores.
     let graph = SymbolGraph::new(symbols.clone(), edges);
-    let scores = graph.page_rank(&seeds)?;
+    let _scores = graph.page_rank(&seeds)?;
 
     // 2️⃣ Initialise everything at L4 (omitted).
     let mut plan = PackPlan {

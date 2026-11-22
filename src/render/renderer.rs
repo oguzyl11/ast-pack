@@ -27,7 +27,7 @@ impl Renderer {
     /// selected detail levels (the "plan"). Returns the full text.
     pub fn render(
         &self,
-        root: &Path,
+        _root: &Path,
         symbols: &[Symbol],
         plan: &HashMap<SymbolId, DetailLevel>,
     ) -> Result<String> {
@@ -73,9 +73,7 @@ impl Renderer {
                     DetailLevel::NameOnly => {
                         output.push_str(&format!("{} …\n", sym.id.symbol_path));
                     }
-                    _ => { /* other levels – omitted */ },
-                        // omitted – nothing to output for this symbol
-                    }
+                    _ => { /* other levels – omitted */ }
                 }
             }
             output.push('\n');
@@ -116,4 +114,3 @@ impl Renderer {
         )
     }
 }
-
