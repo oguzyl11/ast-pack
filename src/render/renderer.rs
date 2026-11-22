@@ -1,9 +1,7 @@
 // src/render/renderer.rs
-use crate::model::{
-    symbol::{Symbol, SymbolId, DetailLevel},
-    edge::Edge,
-    graph::SymbolGraph,
-};
+// Removed unused imports
+use crate::model::{symbol::{Symbol, SymbolId, DetailLevel}};
+
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
 use std::collections::HashMap;
@@ -75,7 +73,7 @@ impl Renderer {
                     DetailLevel::NameOnly => {
                         output.push_str(&format!("{} …\n", sym.id.symbol_path));
                     }
-                    DetailLevel::Omitted => {
+                    _ => { /* other levels – omitted */ },
                         // omitted – nothing to output for this symbol
                     }
                 }

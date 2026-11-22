@@ -30,7 +30,7 @@ pub struct PackPlan {
 pub fn solve_budget(
     symbols: Vec<Symbol>,
     edges: Vec<Edge>,
-    budget: usize,
+    _budget: usize,
     seeds: HashMap<SymbolId, f32>,
 ) -> Result<PackPlan> {
     // 1️⃣ Build graph and compute PageRank scores.
