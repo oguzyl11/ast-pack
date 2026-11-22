@@ -5,19 +5,20 @@ use std::ops::Range;
 
 /// Unique identifier for a symbol in the repository.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-impl SymbolId {
-    /// Generate a stable fold ID string used by the renderer/MCP.
-    pub fn to_fold_id(&self) -> String {
-        format!("{}#{}", self.file.display(), self.symbol_path)
-    }
-}
- {
+pub struct SymbolId {
     /// Absolute path to the source file containing the symbol.
     pub file: PathBuf,
     /// Human‑readable symbol path (e.g., `MyStruct::my_method`).
     pub symbol_path: String,
     /// Optional overload index (e.g., `~2` for second overload).
     pub overload: Option<String>,
+}
+
+impl SymbolId {
+    /// Generate a stable fold ID string used by the renderer/MCP.
+    pub fn to_fold_id(&self) -> String {
+        format!("{}#{}", self.file.display(), self.symbol_path)
+    }
 }
 
 /// Granularity level for emitted symbol detail.
@@ -33,19 +34,12 @@ pub enum DetailLevel {
     NameOnly,
     /// Omitted – placeholder (L4)
     Omitted,
-
-    /// Full source body (L0).
+    // Legacy aliases kept for compatibility
     L0,
-    /// Signature + doc comment + full type definitions (L1).
     L1,
-    /// Signature only (L2).
     L2,
-    /// Name only (outline) (L3).
     L3,
-    /// Omitted – only placeholder appears (L4).
     L4,
-    /// Explicitly omitted – used internally before a level is chosen.
-    Omitted,
 }
 
 /// Information extracted for a symbol.
@@ -66,4 +60,3 @@ pub struct Symbol {
     /// Desired detail level after budgeting.
     pub level: DetailLevel,
 }
-
