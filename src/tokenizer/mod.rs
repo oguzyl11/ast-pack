@@ -1,7 +1,7 @@
 // src/tokenizer/mod.rs
 // Placeholder tokenizer implementation for ast-pack.
 
-pub struct Tokenizer {};
+pub struct Tokenizer {}
 
 impl Tokenizer {
     /// Creates a new tokenizer. Currently a stub that always succeeds.

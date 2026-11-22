@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use tree_sitter::{Node, Parser, Tree};
 use tree_sitter_javascript::language as javascript_language;
 use crate::model::symbol::{Symbol, SymbolId, DetailLevel};
-use crate::tokenizer::token::Tokenizer;
+use crate::tokenizer::Tokenizer;
 
 /// Parse a JavaScript or JSX file and extract symbols.
 pub fn parse(path: &PathBuf) -> Result<Vec<Symbol>> {
     let source = std::fs::read_to_string(path)?;
     let mut parser = Parser::new();
-    parser.set_language(javascript_language())?;
+    parser.set_language(&javascript_language())?;
     let tree = parser.parse(&source, None).ok_or_else(|| anyhow::anyhow!("failed to parse"))?;
 
     let mut symbols = Vec::new();

@@ -1,10 +1,10 @@
-// src/model/symbol.rs
-
 use std::path::PathBuf;
 use std::ops::Range;
+use serde::{Serialize, Deserialize};
+
 
 /// Unique identifier for a symbol in the repository.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SymbolId {
     /// Absolute path to the source file containing the symbol.
     pub file: PathBuf,
@@ -22,7 +22,7 @@ impl SymbolId {
 }
 
 /// Granularity level for emitted symbol detail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DetailLevel {
     /// Full source body (L0)
     Full,

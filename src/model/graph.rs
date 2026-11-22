@@ -1,6 +1,6 @@
 // src/model/graph.rs
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::algo::pagerank;
+use petgraph::algo::page_rank;
 use std::collections::HashMap;
 use anyhow::Result;
 
@@ -61,7 +61,7 @@ impl SymbolGraph {
         }
 
         // PageRank parameters: damping 0.85, max 20 iterations.
-        let scores = pagerank(&self.graph, 0.85, Some(&personalization), None, 20)?;
+        let scores = page_rank(&self.graph, 0.85, 20);
 
         // Convert back to SymbolId -> score.
         let mut result = HashMap::new();

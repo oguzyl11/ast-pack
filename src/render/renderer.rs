@@ -4,7 +4,7 @@ use crate::model::{
     edge::Edge,
     graph::SymbolGraph,
 };
-use crate::tokenizer::token::Tokenizer;
+use crate::tokenizer::Tokenizer;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fs;

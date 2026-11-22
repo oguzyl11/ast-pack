@@ -1,5 +1,7 @@
 // src/model/solver.rs
 use anyhow::Result;
+use serde::{Serialize, Deserialize};
+
 use std::collections::HashMap;
 
 use crate::model::{

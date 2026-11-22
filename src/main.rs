@@ -26,7 +26,7 @@ fn main() {
     let root = PathBuf::from(&args.path);
 
     // 1️⃣ Walk the repository (respect .gitignore, skip binaries etc.)
-    let files = walk::walker::walk_repo(&root);
+    let files = walk::walk_repo(&root);
 
     // 2️⃣ Parse each file to extract symbols (parallelism can be added later).
     let mut all_symbols = Vec::new();
@@ -67,7 +67,7 @@ fn main() {
         .expect("Failed to solve budget");
 
     // 7️⃣ Render the final output.
-    let tokenizer = tokenizer::token::Tokenizer::new(&args.tokenizer).expect("Invalid tokenizer");
+    let tokenizer = tokenizer::Tokenizer::new(&args.tokenizer).expect("Invalid tokenizer");
     let renderer = render::renderer::Renderer::new(tokenizer, &args.format);
     let output = renderer.render(&root, &all_symbols, &plan.levels)
         .expect("Rendering failed");
