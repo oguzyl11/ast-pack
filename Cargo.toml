@@ -14,7 +14,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 blake3 = "1.5"
 arboard = "2.0"
-syn = { version = "2.0", features = ["full"] }
+# tree-sitter dependencies for multiple languages
+tree-sitter = "0.27"
+tree-sitter-typescript = "0.23.2"
+tree-sitter-javascript = "0.25.0"
+tree-sitter-python = "0.20.0"
+tree-sitter-go = "0.20.0"
+tree-sitter-java = "0.20.0"
 
 # Optional for later phases
 # rayon = "1.8"
