@@ -98,7 +98,8 @@ pub fn store(
         imports: imports.to_vec(),
         symbols,
     };
-    let json = serde_json::to_string(&blob).map_err(|err| PackError::msg(format!("cache: {err}")))?;
+    let json =
+        serde_json::to_string(&blob).map_err(|err| PackError::msg(format!("cache: {err}")))?;
     let tmp = dir.join(format!("{hash}.tmp"));
     std::fs::write(&tmp, json)?;
     if path.exists() {

@@ -1,0 +1,8 @@
+/target
+**/*.rs.bk
+.ast-pack-cache
+*.ast-pack-bak
+*.ast-pack-absent
+.DS_Store
+npm/node_modules
+bench/corpus/**/.ast-pack-cache

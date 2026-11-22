@@ -14,7 +14,8 @@ struct Target {
 }
 
 pub fn apply(home: &Path, project: &Path, remove: bool) -> Result<Vec<String>, PackError> {
-    let exe = std::env::current_exe().map_err(|err| PackError::msg(format!("current exe: {err}")))?;
+    let exe =
+        std::env::current_exe().map_err(|err| PackError::msg(format!("current exe: {err}")))?;
     let mut notes = Vec::new();
     for target in targets(home, project) {
         if remove {
@@ -110,7 +111,11 @@ fn write_codex(path: &Path, exe: &Path) -> Result<(), PackError> {
     } else {
         String::new()
     };
-    let command = exe.display().to_string().replace('\\', "\\\\").replace('"', "\\\"");
+    let command = exe
+        .display()
+        .to_string()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
     let section = format!("[mcp_servers.ast-pack]\ncommand = \"{command}\"\nargs = [\"mcp\"]\n");
     let stripped = strip_toml_section(&existing, "[mcp_servers.ast-pack]");
     let mut out = stripped.trim_end().to_string();

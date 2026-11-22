@@ -50,7 +50,9 @@ pub fn snippet(sym: &Symbol, level: DetailLevel, source: &str, format: Format) -
 }
 
 fn render_full(sym: &Symbol, source: &str) -> String {
-    let body = slice(source, sym.span.start..sym.span.end).trim_end().to_string();
+    let body = slice(source, sym.span.start..sym.span.end)
+        .trim_end()
+        .to_string();
     if let Some(doc) = &sym.doc {
         if !body.contains(doc.as_str()) {
             return format!("{doc}\n{body}");
@@ -253,7 +255,8 @@ fn swallowed(sym: &Symbol, input: &RenderInput<'_>) -> bool {
             .iter()
             .find(|s| s.id.fold_id() == parent_id)
             .map(|s| s.kind);
-        if level == DetailLevel::L0 || (level == DetailLevel::L1 && kind.is_some_and(SymbolKind::is_full_at_l1))
+        if level == DetailLevel::L0
+            || (level == DetailLevel::L1 && kind.is_some_and(SymbolKind::is_full_at_l1))
         {
             return true;
         }
@@ -293,7 +296,9 @@ pub fn empty_levels(symbols: &[Symbol], level: DetailLevel) -> HashMap<String, D
         .collect()
 }
 
-pub fn level_map_from_pairs(pairs: impl IntoIterator<Item = (String, DetailLevel)>) -> HashMap<String, DetailLevel> {
+pub fn level_map_from_pairs(
+    pairs: impl IntoIterator<Item = (String, DetailLevel)>,
+) -> HashMap<String, DetailLevel> {
     pairs.into_iter().collect()
 }
 

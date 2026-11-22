@@ -4,13 +4,7 @@ use crate::error::PackError;
 use crate::model::{Symbol, SymbolId};
 use crate::utils::{line_number, slice};
 
-pub mod extract;
-pub mod go;
-pub mod java;
-pub mod javascript;
-pub mod python;
-pub mod rust;
-pub mod typescript;
+use super::{extract, go, java, javascript, python, rust, typescript};
 
 pub fn language_of(rel: &str) -> Option<&'static str> {
     let ext = std::path::Path::new(rel)
@@ -82,6 +76,7 @@ pub fn parse_source(rel: &str, source: &str) -> Result<(Vec<Symbol>, Vec<String>
     Ok((symbols, extracted.imports))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_symbol(
     rel: &str,
     name: &str,

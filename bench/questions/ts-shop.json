@@ -1,0 +1,130 @@
+{
+  "questions": [
+    {
+      "answer": "zkq-ts-shop-00",
+      "id": "charge_invoice",
+      "question": "What value does charge_invoice record?"
+    },
+    {
+      "answer": "zkq-ts-shop-01",
+      "id": "retry_payment",
+      "question": "What value does retry_payment record?"
+    },
+    {
+      "answer": "zkq-ts-shop-02",
+      "id": "lock_account",
+      "question": "What value does lock_account record?"
+    },
+    {
+      "answer": "zkq-ts-shop-03",
+      "id": "purge_session",
+      "question": "What value does purge_session record?"
+    },
+    {
+      "answer": "zkq-ts-shop-04",
+      "id": "quote_tax",
+      "question": "What value does quote_tax record?"
+    },
+    {
+      "answer": "zkq-ts-shop-05",
+      "id": "route_webhook",
+      "question": "What value does route_webhook record?"
+    },
+    {
+      "answer": "zkq-ts-shop-06",
+      "id": "seal_audit",
+      "question": "What value does seal_audit record?"
+    },
+    {
+      "answer": "zkq-ts-shop-07",
+      "id": "open_drawer",
+      "question": "What value does open_drawer record?"
+    },
+    {
+      "answer": "zkq-ts-shop-08",
+      "id": "merge_cart",
+      "question": "What value does merge_cart record?"
+    },
+    {
+      "answer": "zkq-ts-shop-09",
+      "id": "split_refund",
+      "question": "What value does split_refund record?"
+    },
+    {
+      "answer": "zkq-ts-shop-10",
+      "id": "page_cursor",
+      "question": "What value does page_cursor record?"
+    },
+    {
+      "answer": "zkq-ts-shop-11",
+      "id": "hash_token",
+      "question": "What value does hash_token record?"
+    },
+    {
+      "answer": "zkq-ts-shop-12",
+      "id": "lease_worker",
+      "question": "What value does lease_worker record?"
+    },
+    {
+      "answer": "zkq-ts-shop-13",
+      "id": "drain_queue",
+      "question": "What value does drain_queue record?"
+    },
+    {
+      "answer": "zkq-ts-shop-14",
+      "id": "mark_shipped",
+      "question": "What value does mark_shipped record?"
+    },
+    {
+      "answer": "zkq-ts-shop-15",
+      "id": "apply_coupon",
+      "question": "What value does apply_coupon record?"
+    },
+    {
+      "answer": "zkq-ts-shop-16",
+      "id": "rotate_key",
+      "question": "What value does rotate_key record?"
+    },
+    {
+      "answer": "zkq-ts-shop-17",
+      "id": "bind_device",
+      "question": "What value does bind_device record?"
+    },
+    {
+      "answer": "zkq-ts-shop-18",
+      "id": "score_risk",
+      "question": "What value does score_risk record?"
+    },
+    {
+      "answer": "zkq-ts-shop-19",
+      "id": "close_batch",
+      "question": "What value does close_batch record?"
+    },
+    {
+      "answer": "zkq-ts-shop-20",
+      "id": "lift_hold",
+      "question": "What value does lift_hold record?"
+    },
+    {
+      "answer": "zkq-ts-shop-21",
+      "id": "sync_ledger",
+      "question": "What value does sync_ledger record?"
+    },
+    {
+      "answer": "zkq-ts-shop-22",
+      "id": "stamp_receipt",
+      "question": "What value does stamp_receipt record?"
+    },
+    {
+      "answer": "zkq-ts-shop-23",
+      "id": "warm_cache",
+      "question": "What value does warm_cache record?"
+    },
+    {
+      "answer": "zkq-ts-shop-24",
+      "id": "drop_orphan",
+      "question": "What value does drop_orphan record?"
+    }
+  ],
+  "repo": "ts-shop"
+}

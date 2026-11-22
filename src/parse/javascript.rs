@@ -170,7 +170,10 @@ fn add_var_fn(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
     let Some(value) = node.child_by_field_name("value") else {
         return;
     };
-    if !matches!(value.kind(), "arrow_function" | "function" | "function_expression" | "generator_function") {
+    if !matches!(
+        value.kind(),
+        "arrow_function" | "function" | "function_expression" | "generator_function"
+    ) {
         for child in kids(node) {
             walk(child, ctx, parent);
         }

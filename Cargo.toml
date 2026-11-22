@@ -42,7 +42,6 @@ glob = "0.3"
 ignore = "0.4"
 rayon = "1.10"
 tiktoken-rs = "0.6"
-toml = "0.8"
 
 [dev-dependencies]
 proptest = "1.6"

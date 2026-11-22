@@ -44,14 +44,16 @@ pub fn solve(
                 reasons.insert(sym.id.fold_id(), "full dump".to_string());
             }
             swallow(&mut levels, req.symbols);
-            return Ok((levels, decisions(req.symbols, &levels, req.scores, &reasons)));
+            let decided = decisions(req.symbols, &levels, req.scores, &reasons);
+            return Ok((levels, decided));
         }
         PackMode::Names => {
             for sym in req.symbols {
                 levels.insert(sym.id.fold_id(), DetailLevel::L3);
                 reasons.insert(sym.id.fold_id(), "name map".to_string());
             }
-            return Ok((levels, decisions(req.symbols, &levels, req.scores, &reasons)));
+            let decided = decisions(req.symbols, &levels, req.scores, &reasons);
+            return Ok((levels, decided));
         }
         PackMode::Auto => {}
     }
@@ -75,7 +77,8 @@ pub fn solve(
             }
         }
         swallow(&mut levels, req.symbols);
-        return Ok((levels, decisions(req.symbols, &levels, req.scores, &reasons)));
+        let decided = decisions(req.symbols, &levels, req.scores, &reasons);
+        return Ok((levels, decided));
     }
 
     let budget = req.budget.unwrap();
@@ -179,14 +182,18 @@ pub fn solve(
         };
         reasons.insert(id, reason.to_string());
         swallow(&mut levels, req.symbols);
-        if estimate(&levels, req.symbols, header) > budget {
-            // The estimate can jump when a parent stops swallowing its children.
-            // Keep the upgrade; the measured correction below folds it back if needed.
-        }
     }
 
-    fit_budget(&mut levels, req.symbols, req.focus, budget, &mut measure, &mut reasons)?;
-    Ok((levels, decisions(req.symbols, &levels, req.scores, &reasons)))
+    fit_budget(
+        &mut levels,
+        req.symbols,
+        req.focus,
+        budget,
+        &mut measure,
+        &mut reasons,
+    )?;
+    let decided = decisions(req.symbols, &levels, req.scores, &reasons);
+    Ok((levels, decided))
 }
 
 fn fit_budget(
@@ -221,8 +228,8 @@ fn fit_budget(
             })
             .collect();
         order.sort_by(|a, b| {
-            priority(a, levels, symbols)
-                .partial_cmp(&priority(b, levels, symbols))
+            priority(a, levels)
+                .partial_cmp(&priority(b, levels))
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(b.id.fold_id().cmp(&a.id.fold_id()))
         });
@@ -254,8 +261,7 @@ fn fit_budget(
     }
 }
 
-fn priority(sym: &Symbol, levels: &HashMap<String, DetailLevel>, symbols: &[Symbol]) -> f32 {
-    let _ = symbols;
+fn priority(sym: &Symbol, levels: &HashMap<String, DetailLevel>) -> f32 {
     let level = levels[&sym.id.fold_id()];
     let cost = sym.cost_of(level).max(1) as f32;
     level.value() / cost
@@ -297,7 +303,10 @@ fn swallowed_id(id: &str, levels: &HashMap<String, DetailLevel>, symbols: &[Symb
     let mut container = sym.container.as_deref();
     while let Some(parent_id) = container {
         let expanded = levels.get(parent_id).copied().unwrap_or(DetailLevel::L4);
-        let parent_kind = symbols.iter().find(|s| s.id.fold_id() == parent_id).map(|s| s.kind);
+        let parent_kind = symbols
+            .iter()
+            .find(|s| s.id.fold_id() == parent_id)
+            .map(|s| s.kind);
         let swallows = expanded == DetailLevel::L0
             || (expanded == DetailLevel::L1 && parent_kind.is_some_and(|k| k.is_full_at_l1()));
         if swallows {
@@ -325,7 +334,10 @@ fn decisions(
                 id: id.clone(),
                 level: levels.get(&id).copied().unwrap_or(DetailLevel::L4),
                 score: scores.get(&id).copied().unwrap_or(0.0),
-                reason: reasons.get(&id).cloned().unwrap_or_else(|| "omitted".into()),
+                reason: reasons
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| "omitted".into()),
             }
         })
         .collect();
@@ -383,8 +395,13 @@ mod tests {
             mode: PackMode::Auto,
         };
         let (levels, _) = solve(req, |_| 0).unwrap();
-        let used: usize = symbols.iter().map(|s| s.cost_of(levels[&s.id.fold_id()])).sum();
+        let used: usize = symbols
+            .iter()
+            .map(|s| s.cost_of(levels[&s.id.fold_id()]))
+            .sum();
         assert!(used <= 40);
-        assert!(levels[&"a.rs#alpha".to_string()].value() >= levels[&"a.rs#beta".to_string()].value());
+        assert!(
+            levels[&"a.rs#alpha".to_string()].value() >= levels[&"a.rs#beta".to_string()].value()
+        );
     }
 }

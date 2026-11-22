@@ -44,7 +44,10 @@ pub fn assign_containers(symbols: &mut [Symbol]) {
     }
 }
 
-pub fn build_edges(symbols: &[Symbol], imports_by_file: &HashMap<String, Vec<String>>) -> Vec<Edge> {
+pub fn build_edges(
+    symbols: &[Symbol],
+    imports_by_file: &HashMap<String, Vec<String>>,
+) -> Vec<Edge> {
     let mut by_name: HashMap<&str, Vec<&Symbol>> = HashMap::new();
     for sym in symbols {
         by_name.entry(sym.name.as_str()).or_default().push(sym);
@@ -62,14 +65,7 @@ pub fn build_edges(symbols: &[Symbol], imports_by_file: &HashMap<String, Vec<Str
                 });
             }
         }
-        push_named(
-            &mut edges,
-            sym,
-            &sym.refs,
-            &by_name,
-            EdgeKind::Call,
-            true,
-        );
+        push_named(&mut edges, sym, &sym.refs, &by_name, EdgeKind::Call, true);
     }
 
     for (file, imports) in imports_by_file {
@@ -81,10 +77,7 @@ pub fn build_edges(symbols: &[Symbol], imports_by_file: &HashMap<String, Vec<Str
             let Some(targets) = by_name.get(name.as_str()) else {
                 continue;
             };
-            let targets: Vec<&&Symbol> = targets
-                .iter()
-                .filter(|t| t.id.file != *file)
-                .collect();
+            let targets: Vec<&&Symbol> = targets.iter().filter(|t| t.id.file != *file).collect();
             if targets.is_empty() || targets.len() > 12 {
                 continue;
             }
@@ -112,7 +105,14 @@ pub fn build_edges(symbols: &[Symbol], imports_by_file: &HashMap<String, Vec<Str
             .iter()
             .filter_map(|r| r.strip_prefix("type:").map(|s| s.to_string()))
             .collect();
-        push_named(&mut edges, sym, &type_names, &by_name, EdgeKind::TypeUsage, false);
+        push_named(
+            &mut edges,
+            sym,
+            &type_names,
+            &by_name,
+            EdgeKind::TypeUsage,
+            false,
+        );
     }
 
     edges.sort_by(|a, b| {

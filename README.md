@@ -1,209 +1,136 @@
 # ast-pack
 
-**Tagline:** *Fold your codebase. Unfold on demand.*
+**Fold your codebase. Unfold on demand.**
 
----
+`ast-pack` is a Rust CLI and [MCP](https://modelcontextprotocol.io) server. It packs a repository into a hard token budget. Anything it leaves out keeps a stable fold id, and an agent can ask for that body later with `unfold`. Nothing is deleted. It is only deferred.
 
-## What it is
-
-`ast-pack` is a **Rust‑only** CLI tool and MCP (Model‑Control‑Protocol) server that packs a repository into an LLM‑friendly context while respecting a **hard token budget**.  It parses source files with **Tree‑sitter**, builds a **symbol‑level graph**, ranks symbols with **Personalised PageRank**, and decides for each symbol whether to emit:
-
-- **L0** – full source body
-- **L1** – signature + doc comment + type definitions
-- **L2** – signature only
-- **L3** – name only (outline)
-- **L4** – omitted
-
-Every pruned region receives a **stable fold ID** (`<relative/path>#<symbol path>`).  An agent (or a user) can later request the missing body via `ast-pack unfold <id>`.
-
----
-
-## Why it must win
-
-| Feature | Competitor | How `ast-pack` wins |
-|---------|------------|---------------------|
-| Symbol‑level detail | `repomix --compress` (file‑level) | Decisions are made per‑function / method, keeping unrelated symbols tiny.
-| Reversible pruning | Aider repo‑map (static, no bodies) | `fold`/`unfold` lets an agent start small and drill down only when needed.
-| Focus‑aware ranking | Codesurf (file‑level) | `--focus`, `--diff`, `--task` bias the PageRank seeds.
-| Hard token budget | All others – approximate or post‑hoc | Final rendered token count is measured with the real tokenizer and never exceeds `--budget`.
-| Bench‑driven proof | No public benchmark | `context‑bench` repository ships with reproducible numbers.
-
----
-
-## Stack
-
-- **Rust 2021** – single binary, `cargo`‑based.
-- **CLI** – `clap` (derive) for argument parsing.
-- **File walk** – `ignore` crate (gitignore aware).
-- **Parsing** – Tree‑sitter + language grammars (Rust, TS/TSX, JS, Python, Go, Java).
-- **Tokenizer** – `tiktoken‑rs` (`o200k_base` default, `cl100k_base` optional).
-- **Graph & ranking** – `petgraph` + personalised PageRank.
-- **Parallelism** – `rayon` (planned for later phases).
-- **Clipboard** – `arboard` (fallback when headless).
-- **Error handling** – `anyhow` / `thiserror`.
-- **MCP server** – minimal stdio JSON‑RPC implementation.
-- **Testing** – `insta` snapshot tests, `proptest` fuzzed budgets.
-
----
-
-## CLI usage
-
-```text
-ast-pack [PATH]
-    --budget <N>            16000 | 16k (hard token limit)
-    --focus <glob>...       Pin matching symbols to L0 (full body).
-    --diff [<ref>]          Symbols overlapping changed hunks vs <ref> become focus.
-    --task "<text>"         Boost symbols whose name / docs match the task description.
-    --tokenizer o200k|cl100k
-    --format xml|markdown   (default: xml)
-    --copy | -o <file>      Clipboard (default) or write to a file.
-    --stats                 Print token statistics to stderr.
-    --explain               Per‑symbol scoring explanation.
-    --mcp                   Run the MCP stdio server.
-    
-ast-pack unfold <id>...     Print bodies of the given fold IDs with line numbers.
-ast-pack mcp                Start the MCP server (same flags as above are accepted as RPC calls).
-ast-pack setup [--remove]   Register the MCP server with Claude Code, Cursor, Codex, Gemini CLI.
-```
-
-All options can be combined; the CLI validates the budget **before** rendering and exits with a clear error if the focus symbols alone exceed the limit.
-
----
-
-## MCP tools (JSON‑RPC)
-
-| Method | Parameters | Returns |
-|--------|------------|---------|
-| `pack` | `{ path, budget, focus?, diff?, task? }` | `{ context: "...", folds: [{ id, cost }] }` |
-| `unfold` | `{ ids: ["src/file.rs#Symbol::method"] }` | `{ bodies: [{ id, body, line_start }] }` |
-| `outline` | `{ path }` | `{ tree: [{ id, symbol, token_cost }] }` |
-
-The server validates the same token budget logic as the CLI, giving agents a deterministic, reversible view of the repository.
-
----
-
-## Detail levels
-
-| Level | Output | When used |
-|------|--------|-----------|
-| **L0** | Full source body | Focus symbols, or when an agent explicitly unfolds a fold ID. |
-| **L1** | Signature + doc comment + full type definitions (struct fields, interface members). |
-| **L2** | Signature only |
-| **L3** | Name only (used for outline) |
-| **L4** | Omitted (file still listed) |
-
----
-
-## Fold IDs
-
-Format: `<relative/path>#<symbol path>` (e.g. `src/auth.rs#Session::validate`).
-
-* Duplicate overloads receive a `~2`, `~3` suffix in source order. 
-* The fold index (file, byte range, blake3 hash) is stored under `.ast-pack-cache/` and is also embedded compactly for the MCP server to resolve.
-* Rendered markers look like:
-
-```rust
-fn validate(&self, token: &str) -> Result<Claims> { /* ⟨fold:src/auth.rs#Session::validate⟩ 37 lines */ }
-```
-
----
-
-## Pipeline (high‑level)
-
-1. **Walk** – respect `.gitignore`, skip binaries, `target/`, `node_modules/`, etc.
-2. **Parse (parallel)** – cache results keyed by blake3 of file contents.
-3. **Extract definitions** – signatures, bodies, doc comments, imports, references.
-4. **Symbol graph** – edges for calls, imports, type usage, containment; import‑aware name resolution.
-5. **Personalised PageRank** – seeds: focus = 1.0, diff = 0.8, task = 0.5 (fallback plain PR).
-6. **Budget solver** – start at L4, greedily upgrade by *(score gain / token cost)*, then downgrade if needed to fit the exact budget.
-7. **Render** – deterministic directory tree, legend, line numbers, fold markers.
-8. **Unparseable files** – include raw source if budget permits, otherwise warn and skip.
-
----
-
-## `context‑bench`
-
-A `bench/` directory ships with a single command that:
-
-- Clones six open‑source repos (2 TS, 2 Python, 1 Rust, 1 Go) at fixed commits.
-- Loads a JSON set of 25 code‑reading questions per repo.
-- Builds contexts with:
-  - Full dump
-  - `repomix --compress`
-  - Aider‑style repo map
-  - `ast-pack` at 8k/16k/32k budgets (with and without unfold calls)
-- Calls an LLM via the configurable API key (env var) and grades answers.
-- Outputs a markdown table with method, token count, accuracy, extra unfold tokens, and runtime.
-
-Running the benchmark populates the README table with real numbers (place‑holders are left until the first run).
-
----
-
-## Quality bar (phase‑by‑phase)
-
-- `cargo fmt`, `cargo clippy -- -D warnings` – **zero warnings**.
-- `cargo test` – all unit, snapshot and proptest suites pass.
-- **Deterministic output** – identical input → byte‑identical output.
-- **Solver correctness** – every rendered token count ≤ budget, every fold ID resolves to the exact original bytes.
-
----
-
-## Phases (all completed)
-
-| Phase | Goal | Status |
-|-------|------|--------|
-| **Foundation** | CLI skeleton, walker, tokenizer, full dump, `--copy`, `--stats`; preliminary benchmark. | ✅ Finished, tests pass. |
-| **Core** | Rust + TypeScript extraction, L0‑L4 render, symbol graph, PageRank, `--focus`, budget solver, `--explain`. | ✅ Finished, proptests pass. |
-| **Fold** | Stable fold IDs, fold index, `ast-pack unfold`, MCP server (`pack`, `unfold`, `outline`), `setup`. | ✅ Finished, benchmark with unfold runs, accuracy reported. |
-| **Expansion** | Add Python, Go, Java, JavaScript; `--diff`, `--task`; parse cache; 1 M‑line repo under 5 s on 8 cores. | ✅ Finished, snapshot tests pass for all six languages. |
-| **Launch** | README, GIF, Homebrew formula, npm wrapper, CI (GitHub Actions), `cargo‑dist` release.
-| | **All packaging and CI are in place.** | ✅ Finished. |
-
----
-
-## Installation
+## Install
 
 ```bash
-# Using Cargo (requires Rust toolchain)
 cargo install --git https://github.com/oguzyl11/ast-pack.git
 ```
 
-*Homebrew* (macOS & Linux) – formula available under `brew tap oguzyl11/ast-pack`.
-
-*npm wrapper* – `npx ast-pack@latest <args>` downloads the pre‑built binary.
-
----
-
-## Quick start example
+From a checkout:
 
 ```bash
-# Pack the current repository with a 16k token budget, focusing on the entry point.
-ast-pack . --budget 16k --focus src/main.rs --format markdown --copy
+cargo build --release
+# ./target/release/ast-pack
+```
 
-# Start the MCP server (agents can now ask for folds on demand)
+The Homebrew formula in `homebrew/ast-pack.rb` builds the `main` branch (`brew install --HEAD`). The npm package in `npm/` runs a local `ast-pack` binary, or the path in `AST_PACK_BIN`.
+
+## CLI
+
+```text
+ast-pack [PATH]
+    --budget <N>             16000 or 16k. Omit it for an unlimited L1 pack.
+    --focus <glob>...        Pin matching files to full source (L0).
+    --diff [<ref>]           Symbols on changed lines prefer full source. Default ref: HEAD.
+    --task "<text>"          Boost symbols whose name or docs match the text.
+    --tokenizer o200k|cl100k Default: o200k.
+    --format xml|markdown    Default: xml.
+    --copy                   Copy to the clipboard. Prints to stdout if there is no clipboard.
+    -o <file>                Write to a file.
+    --stats                  Token totals and the L0–L4 histogram on stderr.
+    --explain                Why each symbol landed on its level.
+
+ast-pack unfold [--root PATH] <id>...
+ast-pack mcp
+ast-pack setup [--remove]
+```
+
+`--focus` that does not fit in the budget is an error. A directory prefix matches that tree (`--focus src/auth` matches `src/auth.rs` and `src/auth/token.rs`).
+
+```bash
+ast-pack . --budget 16k --focus src/main.rs --format markdown
+ast-pack --diff main --budget 32k --stats
+ast-pack unfold src/auth.rs#Session::validate
 ast-pack mcp
 ```
 
-The server will listen on stdin/stdout; agents can send JSON‑RPC like:
+`setup` registers the MCP server with Cursor, Claude Code, Codex, and Gemini CLI. It copies each file it edits aside once. `setup --remove` puts those files back.
 
-```json
-{ "method": "pack", "params": { "path": ".", "budget": "16k" }, "id": 1 }
+## Levels
+
+| Level | What you get |
+| --- | --- |
+| L0 | Full source |
+| L1 | Signature, doc comment, and the full type (struct fields, interface members, enums, aliases) |
+| L2 | Signature |
+| L3 | Name |
+| L4 | Omitted. The file stays in the tree |
+
+A folded region looks like this:
+
+```rust
+pub fn validate(&self, token: &str) -> bool { /* ⟨fold:src/auth.rs#Session::validate⟩ 12 lines */ }
 ```
 
----
+Fold ids are `<relative/path>#<symbol path>`. A second overload in the same file is `~2`, then `~3`, in source order. If the file changed after the fold was written, `unfold` returns the current body and says so on stderr.
 
-## FAQ
+## MCP
 
-- **Does `ast-pack` ever lose code?** No. Pruned bodies are stored under a stable fold ID and can be retrieved with `unfold`.
-- **Is the token count accurate?** Yes – the final rendered output is tokenised with the selected tokenizer and the count is enforced strictly.
-- **Can I add a new language?** Add the Tree‑sitter grammar crate, a tiny parser wrapper under `src/parse/`, and update `parse_file` dispatcher.
+`ast-pack mcp` speaks JSON-RPC on stdin/stdout. It accepts a bare JSON line or a `Content-Length` frame.
 
----
+| Tool | Input | Output |
+| --- | --- | --- |
+| `pack` | `path`, `budget`, optional `focus`, `diff`, `task`, `format` | Packed context, token count, fold ids |
+| `unfold` | `ids` (or one `id`), optional `path` | Bodies with line numbers |
+| `outline` | `path` | Symbols and the token cost of each full body |
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"pack","params":{"path":".","budget":"16k"}}
+```
+
+## How a pack is built
+
+1. Walk the tree, honoring `.gitignore`, and skip `target`, `node_modules`, and `.ast-pack-cache`.
+2. Parse Rust, TypeScript, TSX, JavaScript, Python, Go, and Java with Tree-sitter. Results are cached by blake3 of the file bytes.
+3. Build a symbol graph: calls, imports, containment, and type names. Ambiguous names get a fractional edge weight (`1 / n`).
+4. Rank symbols with personalized PageRank. Seeds are fixed: `--focus` 1.0, `--diff` 0.8, `--task` 0.5.
+5. Start at L4 and upgrade by score gained per extra token. Focused files stay at L0.
+6. Render XML or Markdown, count the result with the real tokenizer (`o200k` or `cl100k`), and fold symbols back until the text fits.
+7. Write `.ast-pack-cache/folds.json` so `unfold` can see whether a file changed.
+
+The same input produces the same output bytes. Parse work is parallel.
+
+## context-bench
+
+`bench/` holds six local repositories (2 TypeScript, 2 Python, 1 Rust, 1 Go) and 25 questions each. The answer string lives in the function body, not in the signature. `cargo run --bin context-bench` rebuilds the corpus if it is missing and writes `bench/RESULTS.md`.
+
+Coverage here means the answer string is in the context. It is not an LLM grade. The judge prompt for an optional model grader is `bench/judge_prompt.txt`.
+
+Measured on this corpus with the `o200k` tokenizer (averages over the six repos):
+
+| Method | Avg tokens | Avg extra unfold tokens | Coverage |
+| --- | ---: | ---: | ---: |
+| Full dump | 16003 | 0 | 100% |
+| Comment-stripped compress | 12980 | 0 | 100% |
+| Name map | 1482 | 0 | 0% |
+| ast-pack 8k | 7562 | 0 | 44.0% |
+| ast-pack 8k + unfold | 7562 | 538 | 100% |
+| ast-pack 16k | 14706 | 0 | 92.7% |
+| ast-pack 16k + unfold | 14706 | 79 | 100% |
+| ast-pack 32k | 16003 | 0 | 100% |
+
+On this corpus the full dump is 16,003 tokens, so a 32k budget is the whole repo. At 8k, unfold spends about 538 extra tokens and retrieves every answer the full dump retrieves. That is about half the tokens of the full dump, not 15%. The 15% line stays out of this README until a larger corpus measures it.
+
+Another tool can add a row by opening a pull request with the command it ran and a script that reproduces the table. The pull request template has a checklist for that.
+
+## Adding a language
+
+Add the Tree-sitter grammar, a parser module under `src/parse/`, and a match arm in `src/parse/dispatch.rs`. The issue template "New Language Support" is the place to ask for one.
+
+## Development
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```
+
+The tests cover the six languages, overload ids, the hard budget (including a property test), focus that does not fit, task bias, diff focus, unfold after a file change, MCP, and `setup --remove`.
 
 ## License
 
-Both **MIT** and **Apache‑2.0** licenses are provided – pick the one that fits your project.
-
----
-
-*Happy folding!*
+MIT or Apache-2.0, at your option.

@@ -57,7 +57,8 @@ fn o200k() -> Result<&'static CoreBPE, PackError> {
     if let Some(existing) = CELL.get() {
         return Ok(existing);
     }
-    let bpe = tiktoken_rs::o200k_base().map_err(|err| PackError::msg(format!("tokenizer: {err}")))?;
+    let bpe =
+        tiktoken_rs::o200k_base().map_err(|err| PackError::msg(format!("tokenizer: {err}")))?;
     Ok(CELL.get_or_init(|| bpe))
 }
 
@@ -66,7 +67,8 @@ fn cl100k() -> Result<&'static CoreBPE, PackError> {
     if let Some(existing) = CELL.get() {
         return Ok(existing);
     }
-    let bpe = tiktoken_rs::cl100k_base().map_err(|err| PackError::msg(format!("tokenizer: {err}")))?;
+    let bpe =
+        tiktoken_rs::cl100k_base().map_err(|err| PackError::msg(format!("tokenizer: {err}")))?;
     Ok(CELL.get_or_init(|| bpe))
 }
 

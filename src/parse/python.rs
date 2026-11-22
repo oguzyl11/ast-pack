@@ -7,7 +7,11 @@ use super::extract::{
 use crate::error::PackError;
 use crate::model::SymbolKind;
 
-const DEFS: &[&str] = &["function_definition", "class_definition", "decorated_definition"];
+const DEFS: &[&str] = &[
+    "function_definition",
+    "class_definition",
+    "decorated_definition",
+];
 
 pub fn extract(source: &str) -> Result<super::rust::Extracted, PackError> {
     let tree = parse_language(source, tree_sitter_python::LANGUAGE.into())?;
@@ -45,7 +49,8 @@ fn walk(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
                 } else {
                     SymbolKind::Function
                 };
-                let doc = python_docstring(node, ctx.source).or_else(|| preceding_doc(node, ctx.source));
+                let doc =
+                    python_docstring(node, ctx.source).or_else(|| preceding_doc(node, ctx.source));
                 ctx.add(
                     node,
                     &name,
@@ -69,7 +74,8 @@ fn walk(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
                 let extra = node
                     .child_by_field_name("body")
                     .and_then(|body| field_blob(body, ctx.source, DEFS));
-                let doc = python_docstring(node, ctx.source).or_else(|| preceding_doc(node, ctx.source));
+                let doc =
+                    python_docstring(node, ctx.source).or_else(|| preceding_doc(node, ctx.source));
                 ctx.add(
                     node,
                     &name,

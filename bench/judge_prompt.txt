@@ -1,0 +1,4 @@
+You are grading a code-reading answer. You receive the question, the reference answer, and the model's answer.
+Reply with a single JSON object: {"correct": true} or {"correct": false}.
+Mark correct only when the model's answer states the same fact as the reference. Wording may differ. Do not award partial credit.
+Do not use knowledge from outside the reference answer.

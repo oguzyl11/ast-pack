@@ -128,7 +128,8 @@ pub fn pack(options: &PackOptions) -> Result<PackOutput, PackError> {
         .into_iter()
         .enumerate()
         {
-            sym.cost[index] = tokenizer.count(&renderer::snippet(sym, level, source, options.format));
+            sym.cost[index] =
+                tokenizer.count(&renderer::snippet(sym, level, source, options.format));
         }
     }
 
@@ -269,11 +270,14 @@ pub fn pack(options: &PackOptions) -> Result<PackOutput, PackError> {
     })
 }
 
-fn parse_file(root: &std::path::Path, file: &SourceFile, cache_on: bool) -> Result<ParsedFile, PackError> {
+fn parse_file(
+    root: &std::path::Path,
+    file: &SourceFile,
+    cache_on: bool,
+) -> Result<ParsedFile, PackError> {
     let bytes = std::fs::read(&file.absolute)?;
-    let source = String::from_utf8(bytes.clone()).map_err(|_| {
-        PackError::msg(format!("{} is not valid UTF-8", file.relative))
-    })?;
+    let source = String::from_utf8(bytes.clone())
+        .map_err(|_| PackError::msg(format!("{} is not valid UTF-8", file.relative)))?;
     let hash = hash_bytes(&bytes);
     if cache_on {
         if let Some((symbols, imports)) = cache::load(root, &hash, &file.relative) {
@@ -302,7 +306,10 @@ fn parse_file(root: &std::path::Path, file: &SourceFile, cache_on: bool) -> Resu
 fn focus_ids(symbols: &[Symbol], patterns: &[String]) -> HashSet<String> {
     let mut ids = HashSet::new();
     for sym in symbols {
-        if patterns.iter().any(|pattern| focus_matches(pattern, &sym.id.file)) {
+        if patterns
+            .iter()
+            .any(|pattern| focus_matches(pattern, &sym.id.file))
+        {
             ids.insert(sym.id.fold_id());
         }
     }

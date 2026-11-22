@@ -32,6 +32,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add(
         &mut self,
         node: Node,
@@ -118,10 +119,7 @@ pub fn body_start(node: Node) -> usize {
 pub fn preceding_doc(node: Node, source: &str) -> Option<String> {
     let mut current = node;
     let mut lines = Vec::new();
-    loop {
-        let Some(prev) = current.prev_sibling() else {
-            break;
-        };
+    while let Some(prev) = current.prev_sibling() {
         let kind = prev.kind();
         if matches!(
             kind,
@@ -176,7 +174,14 @@ const CALL_KINDS: &[&str] = &["call", "call_expression", "method_invocation"];
 
 pub fn collect_refs(node: Node, source: &str, def_kinds: &[&str]) -> Vec<String> {
     let mut refs = Vec::new();
-    fn walk(node: Node, source: &str, def_kinds: &[&str], root: bool, sig_end: usize, refs: &mut Vec<String>) {
+    fn walk(
+        node: Node,
+        source: &str,
+        def_kinds: &[&str],
+        root: bool,
+        sig_end: usize,
+        refs: &mut Vec<String>,
+    ) {
         if !root && def_kinds.contains(&node.kind()) {
             return;
         }
@@ -254,7 +259,8 @@ pub fn field_blob(body: Node, source: &str, skip_kinds: &[&str]) -> Option<Strin
 }
 
 pub fn assign_overloads(drafts: &mut [Draft]) {
-    let mut groups: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+    let mut groups: std::collections::HashMap<String, Vec<usize>> =
+        std::collections::HashMap::new();
     for (i, draft) in drafts.iter().enumerate() {
         groups.entry(draft.symbol_path.clone()).or_default().push(i);
     }

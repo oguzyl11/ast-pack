@@ -79,7 +79,9 @@ fn walk(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
                     Some("struct_type") => SymbolKind::Struct,
                     _ => SymbolKind::TypeAlias,
                 };
-                let sig_end = ty.map(|n| n.start_byte()).unwrap_or_else(|| node.end_byte());
+                let sig_end = ty
+                    .map(|n| n.start_byte())
+                    .unwrap_or_else(|| node.end_byte());
                 ctx.add(
                     node,
                     &name,

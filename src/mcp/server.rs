@@ -1,4 +1,4 @@
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 use serde_json::{json, Value};
@@ -14,10 +14,7 @@ pub fn run() -> Result<(), PackError> {
     let stdin = io::stdin();
     let mut reader = stdin.lock();
     let mut stdout = io::stdout();
-    loop {
-        let Some(incoming) = read_message(&mut reader)? else {
-            break;
-        };
+    while let Some(incoming) = read_message(&mut reader)? {
         if let Some(response) = handle_request(&incoming.body) {
             write_message(&mut stdout, &response, incoming.framed)?;
         }
@@ -81,12 +78,19 @@ pub fn handle_request(body: &str) -> Option<String> {
     let value: Value = match serde_json::from_str(body) {
         Ok(value) => value,
         Err(err) => {
-            return Some(error_response(Value::Null, -32700, &format!("parse error: {err}")));
+            return Some(error_response(
+                Value::Null,
+                -32700,
+                &format!("parse error: {err}"),
+            ));
         }
     };
     let id = value.get("id").cloned().unwrap_or(Value::Null);
     let method = value.get("method").and_then(Value::as_str).unwrap_or("");
-    if method.starts_with("notifications/") || value.get("id").is_none() || id.is_null() && method.starts_with("notifications/") {
+    if method.starts_with("notifications/")
+        || value.get("id").is_none()
+        || id.is_null() && method.starts_with("notifications/")
+    {
         return None;
     }
     if method.is_empty() {
@@ -202,15 +206,18 @@ fn tool_call(params: &Value) -> Result<Value, PackError> {
 }
 
 fn pack_value(params: &Value) -> Result<Value, PackError> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .unwrap_or(".");
+    let path = params.get("path").and_then(Value::as_str).unwrap_or(".");
     let mut options = PackOptions::new(PathBuf::from(path));
     options.budget = params.get("budget").and_then(budget_value);
     options.focus = string_list(params.get("focus"));
-    options.diff = params.get("diff").and_then(Value::as_str).map(str::to_string);
-    options.task = params.get("task").and_then(Value::as_str).map(str::to_string);
+    options.diff = params
+        .get("diff")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    options.task = params
+        .get("task")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     if let Some(format) = params.get("format").and_then(Value::as_str) {
         options.format = Format::parse(format)?;
     }

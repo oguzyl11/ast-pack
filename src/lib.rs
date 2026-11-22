@@ -19,6 +19,7 @@ pub mod walk;
 
 pub use error::PackError;
 pub use fold::{unfold, Unfolded};
+pub use mode::PackMode;
 pub use pipeline::{pack, FoldSummary, PackOptions, PackOutput};
 pub use render::Format;
 pub use tokenizer::Tokenizer;

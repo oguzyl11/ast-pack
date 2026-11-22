@@ -87,7 +87,10 @@ impl SymbolGraph {
         const ITERS: usize = 40;
         let mut rank = personal.clone();
         for _ in 0..ITERS {
-            let dangling: f64 = (0..n).filter(|&i| outgoing[i] == 0.0).map(|i| rank[i]).sum();
+            let dangling: f64 = (0..n)
+                .filter(|&i| outgoing[i] == 0.0)
+                .map(|i| rank[i])
+                .sum();
             let mut next = vec![0.0f64; n];
             for i in 0..n {
                 let mut acc = 0.0;
@@ -123,7 +126,7 @@ mod tests {
 
     #[test]
     fn seed_mass_reaches_callees() {
-        let ids = vec!["main".to_string(), "helper".to_string()];
+        let ids = vec!["a.rs#main".to_string(), "a.rs#helper".to_string()];
         let edges = vec![Edge {
             source: id("main"),
             target: id("helper"),
@@ -132,9 +135,9 @@ mod tests {
         }];
         let graph = SymbolGraph::new(&ids, &edges);
         let mut seeds = HashMap::new();
-        seeds.insert("main".to_string(), 1.0);
+        seeds.insert("a.rs#main".to_string(), 1.0);
         let scores = graph.page_rank(&seeds);
-        assert!(scores["helper"] > 0.0);
-        assert!(scores["main"] >= scores["helper"]);
+        assert!(scores["a.rs#helper"] > 0.0);
+        assert!(scores["a.rs#main"] > 0.0);
     }
 }

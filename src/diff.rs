@@ -61,7 +61,7 @@ pub fn parse_unified_diff(text: &str) -> HashMap<String, Vec<RangeInclusive<usiz
 fn hunk_new_lines(line: &str) -> Option<RangeInclusive<usize>> {
     let plus = line.split_whitespace().find(|part| part.starts_with('+'))?;
     let plus = plus.trim_start_matches('+');
-    if plus == "" || plus.starts_with('+') {
+    if plus.is_empty() || plus.starts_with('+') {
         return None;
     }
     let mut parts = plus.split(',');

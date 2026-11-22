@@ -88,7 +88,9 @@ fn walk(node: Node, ctx: &mut Ctx, parent: Option<&str>) {
                 }
             }
         }
-        "function_item" | "function_signature_item" => add_named(node, ctx, parent, SymbolKind::Function, DEFS),
+        "function_item" | "function_signature_item" => {
+            add_named(node, ctx, parent, SymbolKind::Function, DEFS)
+        }
         "struct_item" | "union_item" => add_named(node, ctx, parent, SymbolKind::Struct, DEFS),
         "enum_item" => add_named(node, ctx, parent, SymbolKind::Enum, DEFS),
         "trait_item" => add_named(node, ctx, parent, SymbolKind::Trait, DEFS),
@@ -126,7 +128,10 @@ fn add_named(node: Node, ctx: &mut Ctx, parent: Option<&str>, kind: SymbolKind, 
         preceding_doc(node, ctx.source),
     );
     if let Some(body) = node.child_by_field_name("body") {
-        let next_parent = if matches!(kind, SymbolKind::Function | SymbolKind::Method | SymbolKind::Trait | SymbolKind::Module) {
+        let next_parent = if matches!(
+            kind,
+            SymbolKind::Function | SymbolKind::Method | SymbolKind::Trait | SymbolKind::Module
+        ) {
             Some(path)
         } else {
             parent.map(|p| p.to_string())

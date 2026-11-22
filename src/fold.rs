@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -59,12 +59,11 @@ pub fn unfold(root: &Path, ids: &[String]) -> Result<Unfolded, PackError> {
     let mut text = String::new();
     let mut warnings = Vec::new();
     for id in ids {
-        let (file, _) = split_fold_id(id)
-            .ok_or_else(|| PackError::msg(format!("invalid fold id `{id}`")))?;
+        let (file, _) =
+            split_fold_id(id).ok_or_else(|| PackError::msg(format!("invalid fold id `{id}`")))?;
         let absolute = root.join(file);
-        let bytes = std::fs::read(&absolute).map_err(|_| {
-            PackError::msg(format!("could not read {file} for fold `{id}`"))
-        })?;
+        let bytes = std::fs::read(&absolute)
+            .map_err(|_| PackError::msg(format!("could not read {file} for fold `{id}`")))?;
         let source = String::from_utf8(bytes.clone())
             .map_err(|_| PackError::msg(format!("{file} is not valid UTF-8")))?;
         let hash = hash_bytes(&bytes);
@@ -77,7 +76,9 @@ pub fn unfold(root: &Path, ids: &[String]) -> Result<Unfolded, PackError> {
         }
         let (symbols, _) = parse_source(file, &source)?;
         let Some(sym) = symbols.iter().find(|s| s.id.fold_id() == *id) else {
-            return Err(PackError::msg(format!("fold `{id}` was not found in {file}")));
+            return Err(PackError::msg(format!(
+                "fold `{id}` was not found in {file}"
+            )));
         };
         if !text.is_empty() {
             text.push('\n');

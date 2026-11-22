@@ -2,7 +2,7 @@ pub mod args;
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 use crate::error::PackError;
 use crate::fold;
@@ -28,7 +28,8 @@ pub fn execute() -> Result<(), PackError> {
         }
         Some("-h") | Some("--help") => {
             let mut cmd = PackArgs::command();
-            cmd.print_help().map_err(|err| PackError::msg(err.to_string()))?;
+            cmd.print_help()
+                .map_err(|err| PackError::msg(err.to_string()))?;
             println!();
             Ok(())
         }
