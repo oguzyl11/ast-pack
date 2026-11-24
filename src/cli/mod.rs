@@ -73,21 +73,14 @@ fn pack_cmd() -> Result<(), PackError> {
         println!("{}", packed.text);
     }
     if args.stats {
-        let counts = packed.level_counts;
-        eprintln!(
-            "tokens: {}{}",
-            packed.tokens,
-            packed
-                .tokens_full
-                .map(|full| format!(" / full {full}"))
-                .unwrap_or_default()
-        );
-        if let Some(budget) = options.budget {
-            eprintln!("budget: {budget}");
-        }
-        eprintln!(
-            "levels: L0={} L1={} L2={} L3={} L4={}",
-            counts[0], counts[1], counts[2], counts[3], counts[4]
+        eprint!(
+            "{}",
+            format_stats(
+                packed.tokens,
+                packed.tokens_full,
+                options.budget,
+                packed.level_counts,
+            )
         );
     }
     if args.explain {
@@ -102,6 +95,47 @@ fn pack_cmd() -> Result<(), PackError> {
         }
     }
     Ok(())
+}
+
+/// Stderr block printed by `--stats`.
+///
+/// Savings use published input prices: Claude Sonnet 4 at $3 / 1M tokens and
+/// GPT-4o at $2.50 / 1M tokens.
+pub fn format_stats(
+    tokens: usize,
+    tokens_full: Option<usize>,
+    budget: Option<usize>,
+    counts: [usize; 5],
+) -> String {
+    let mut out = format!("tokens: {tokens}");
+    if let Some(full) = tokens_full {
+        let saved = full.saturating_sub(tokens);
+        out.push_str(&format!(" / full {full}\n{}", savings_line(saved)));
+    }
+    out.push('\n');
+    if let Some(budget) = budget {
+        out.push_str(&format!("budget: {budget}\n"));
+    }
+    out.push_str(&format!(
+        "levels: L0={} L1={} L2={} L3={} L4={}\n",
+        counts[0], counts[1], counts[2], counts[3], counts[4]
+    ));
+    out
+}
+
+/// `est. savings: ~$0.43/req (Claude Sonnet) | ~$0.36/req (GPT-4o)`
+pub fn savings_line(saved_tokens: usize) -> String {
+    format!(
+        "est. savings: ~{}/req (Claude Sonnet) | ~{}/req (GPT-4o)",
+        usd_from_saved(saved_tokens, 300),
+        usd_from_saved(saved_tokens, 250),
+    )
+}
+
+/// `cents_per_million` is the model input price in US cents per 1M tokens.
+fn usd_from_saved(saved_tokens: usize, cents_per_million: u128) -> String {
+    let cents = (saved_tokens as u128 * cents_per_million + 500_000) / 1_000_000;
+    format!("${}.{:02}", cents / 100, cents % 100)
 }
 
 fn unfold_cmd(args: &[String]) -> Result<(), PackError> {
@@ -139,4 +173,34 @@ fn setup_cmd(args: &[String]) -> Result<(), PackError> {
         println!("{note}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn savings_line_uses_sonnet_and_gpt4o_prices() {
+        let saved = 146_281usize.saturating_sub(2_633);
+        assert_eq!(
+            savings_line(saved),
+            "est. savings: ~$0.43/req (Claude Sonnet) | ~$0.36/req (GPT-4o)"
+        );
+        assert_eq!(
+            savings_line(1_000_000),
+            "est. savings: ~$3.00/req (Claude Sonnet) | ~$2.50/req (GPT-4o)"
+        );
+        assert_eq!(
+            savings_line(0),
+            "est. savings: ~$0.00/req (Claude Sonnet) | ~$0.00/req (GPT-4o)"
+        );
+    }
+
+    #[test]
+    fn stats_report_places_savings_under_the_token_line() {
+        let report = format_stats(2_633, Some(146_281), Some(4_000), [0, 0, 18, 17, 376]);
+        assert!(report.starts_with("tokens: 2633 / full 146281\nest. savings: ~$0.43/req (Claude Sonnet) | ~$0.36/req (GPT-4o)\n"));
+        assert!(report.contains("budget: 4000\n"));
+        assert!(report.contains("levels: L0=0 L1=0 L2=18 L3=17 L4=376\n"));
+    }
 }

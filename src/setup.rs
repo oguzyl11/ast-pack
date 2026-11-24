@@ -6,6 +6,7 @@ use crate::utils::{backup_once, restore_backup};
 enum TargetKind {
     Json,
     Codex,
+    Text(&'static str),
 }
 
 struct Target {
@@ -30,6 +31,7 @@ pub fn apply(home: &Path, project: &Path, remove: bool) -> Result<Vec<String>, P
         match target.kind {
             TargetKind::Json => write_mcp_json(&target.path, &exe)?,
             TargetKind::Codex => write_codex(&target.path, &exe)?,
+            TargetKind::Text(body) => write_text(&target.path, body)?,
         }
         notes.push(format!("registered {}", target.path.display()));
     }
@@ -62,7 +64,63 @@ fn targets(home: &Path, project: &Path) -> Vec<Target> {
             path: home.join(".gemini").join("settings.json"),
             kind: TargetKind::Json,
         },
+        Target {
+            path: project
+                .join(".claude")
+                .join("skills")
+                .join("ast-pack")
+                .join("SKILL.md"),
+            kind: TargetKind::Text(SKILL_MD),
+        },
+        Target {
+            path: project.join(".cursor").join("rules").join("ast-pack.mdc"),
+            kind: TargetKind::Text(CURSOR_RULE),
+        },
     ]
+}
+
+const SKILL_MD: &str = "\
+---
+name: ast-pack
+description: Fold a repository into a token budget before reading files.
+---
+
+# ast-pack
+
+Always call `pack` with `--budget` and `--task` before reading whole files, and call `unfold` on `⟨fold:...⟩` IDs only when you need the exact implementation body.
+
+Use the MCP tools `pack`, `unfold`, and `outline`.
+
+- Pass a hard budget (`16k`, `32k`) and a task sentence that names the change.
+- Read the folded pack first. A `⟨fold:PATH#SYMBOL⟩` marker is a stable id, not a deleted body.
+- Unfold that id only when the signature is not enough and you need the exact implementation.
+- Unfold one id at a time. Do not open the rest of the file to fill context.
+";
+
+const CURSOR_RULE: &str = "\
+---
+description: Fold the repo with ast-pack before reading whole files.
+alwaysApply: true
+---
+
+# ast-pack
+
+Always call `pack` with `--budget` and `--task` before reading whole files, and call `unfold` on `⟨fold:...⟩` IDs only when you need the exact implementation body.
+
+- Call the ast-pack MCP tool `pack` before opening source files.
+- Always include `--budget` and `--task`.
+- Call `unfold` on a `⟨fold:PATH#SYMBOL⟩` id only when you need the exact implementation body.
+- Leave every other symbol folded.
+- Prefer `outline` when you only need the symbol tree.
+- Do not paste an unfolded body into the next pack.
+";
+
+fn write_text(path: &Path, body: &str) -> Result<(), PackError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, body)?;
+    Ok(())
 }
 
 fn write_mcp_json(path: &Path, exe: &Path) -> Result<(), PackError> {

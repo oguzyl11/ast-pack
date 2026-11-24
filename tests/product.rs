@@ -353,6 +353,77 @@ fn setup_round_trip_restores_files() {
 }
 
 #[test]
+fn stats_report_matches_packed_token_savings() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "src/lib.rs",
+        "pub fn retry_limit() -> i32 { 5 }\n",
+    );
+    let mut options = PackOptions::new(dir.path());
+    options.budget = Some(400);
+    options.compute_full = true;
+    options.cache = false;
+    options.write_folds = false;
+    let packed = pack(&options).unwrap();
+    let full = packed.tokens_full.expect("full token count");
+    let saved = full.saturating_sub(packed.tokens);
+    let report = ast_pack::cli::format_stats(
+        packed.tokens,
+        packed.tokens_full,
+        options.budget,
+        packed.level_counts,
+    );
+    let expected = ast_pack::cli::savings_line(saved);
+    assert!(report.contains(&format!("tokens: {} / full {full}", packed.tokens)));
+    assert!(report.contains(&expected));
+    assert!(expected.contains("~$"));
+    assert!(expected.contains("(Claude Sonnet)"));
+    assert!(expected.contains("(GPT-4o)"));
+}
+
+#[test]
+fn setup_writes_agent_files_and_remove_cleans_them() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let skill = project
+        .path()
+        .join(".claude")
+        .join("skills")
+        .join("ast-pack")
+        .join("SKILL.md");
+    let rule = project
+        .path()
+        .join(".cursor")
+        .join("rules")
+        .join("ast-pack.mdc");
+    let prior = "keep this local rule\n";
+    fs::create_dir_all(rule.parent().unwrap()).unwrap();
+    fs::write(&rule, prior).unwrap();
+
+    ast_pack::setup::apply(home.path(), project.path(), false).unwrap();
+    let skill_text = fs::read_to_string(&skill).unwrap();
+    let rule_text = fs::read_to_string(&rule).unwrap();
+    for text in [&skill_text, &rule_text] {
+        let lines = text.lines().count();
+        assert!(
+            (15..=20).contains(&lines),
+            "expected 15-20 lines, got {lines}"
+        );
+        assert!(text.contains(
+            "Always call `pack` with `--budget` and `--task` before reading whole files, and call `unfold` on `⟨fold:...⟩` IDs only when you need the exact implementation body."
+        ));
+    }
+    assert!(skill_text.contains("name: ast-pack"));
+    assert!(rule_text.contains("alwaysApply: true"));
+
+    ast_pack::setup::apply(home.path(), project.path(), true).unwrap();
+    assert!(!skill.exists());
+    assert_eq!(fs::read_to_string(&rule).unwrap(), prior);
+    assert!(!rule.with_extension("mdc.ast-pack-bak").exists());
+}
+
+#[test]
 fn markdown_mentions_the_fold_id() {
     let dir = tempfile::tempdir().unwrap();
     write(
